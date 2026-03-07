@@ -58,36 +58,42 @@ class AzureBlobBackend(BackendProtocol):
         self._config = config
         self._client: Optional[BlobServiceClient] = None
         self._container: Optional[ContainerClient] = None
+        self._init_lock = asyncio.Lock()
 
     async def _get_container(self) -> ContainerClient:
         """Lazily initialise and return the container client."""
         if self._container is not None:
             return self._container
 
-        kwargs: dict[str, Any] = {}
-        if self._config.api_version:
-            kwargs["api_version"] = self._config.api_version
+        async with self._init_lock:
+            # Double-checked locking to avoid races when lazily initialising
+            if self._container is not None:
+                return self._container
 
-        if self._config.connection_string:
-            self._client = BlobServiceClient.from_connection_string(
-                self._config.connection_string,
-                **kwargs,
-            )
-        else:
-            credential = self._config.credential
-            if credential is None:
-                from azure.identity.aio import DefaultAzureCredential
+            kwargs: dict[str, Any] = {}
+            if self._config.api_version:
+                kwargs["api_version"] = self._config.api_version
 
-                credential = DefaultAzureCredential()
-            self._client = BlobServiceClient(
-                account_url=self._config.account_url,
-                credential=credential,
-                **kwargs,
+            if self._config.connection_string:
+                self._client = BlobServiceClient.from_connection_string(
+                    self._config.connection_string,
+                    **kwargs,
+                )
+            else:
+                credential = self._config.credential
+                if credential is None:
+                    from azure.identity.aio import DefaultAzureCredential
+
+                    credential = DefaultAzureCredential()
+                self._client = BlobServiceClient(
+                    account_url=self._config.account_url,
+                    credential=credential,
+                    **kwargs,
+                )
+            self._container = self._client.get_container_client(
+                self._config.container_name,
             )
-        self._container = self._client.get_container_client(
-            self._config.container_name,
-        )
-        return self._container
+            return self._container
 
     async def close(self) -> None:
         """Close the underlying Azure SDK clients and release network resources.
@@ -158,7 +164,10 @@ class AzureBlobBackend(BackendProtocol):
     ) -> list[Any]:
         """List all blobs under the given prefix."""
         blobs = []
-        async for blob in container.list_blobs(name_starts_with=prefix or None):
+        async for blob in container.list_blobs(
+            name_starts_with=prefix or None,
+            include=["metadata"],
+        ):
             blobs.append(blob)
         return blobs
 
