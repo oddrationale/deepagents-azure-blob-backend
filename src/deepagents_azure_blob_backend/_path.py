@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from deepagents.backends.utils import validate_path
+
 
 def normalize_path(path: str) -> str:
     """Normalize a virtual filesystem path.
 
-    Strips leading/trailing slashes and collapses double slashes.
-    Returns the path without leading slash (suitable for blob key construction).
+    Validates the path against Deep Agents' virtual filesystem rules, then
+    returns it without a leading slash for blob key construction.
 
     Args:
         path: Virtual filesystem path (e.g., "/src/main.py").
@@ -15,15 +17,11 @@ def normalize_path(path: str) -> str:
     Returns:
         Normalized path without leading slash (e.g., "src/main.py").
     """
-    # Strip leading slashes
-    result = path.lstrip("/")
-    # Collapse double slashes
-    while "//" in result:
-        result = result.replace("//", "/")
-    # Strip trailing slash (unless empty)
-    if result and result != "/":
-        result = result.rstrip("/")
-    return result
+    if path == "":
+        return ""
+
+    normalized = validate_path(path)
+    return "" if normalized == "/" else normalized.lstrip("/")
 
 
 def to_blob_key(prefix: str, path: str) -> str:
