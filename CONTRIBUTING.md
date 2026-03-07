@@ -9,8 +9,8 @@ Contributions are welcome! Here's how to get started.
 git clone https://github.com/oddrationale/deepagents-azure-blob-backend.git
 cd deepagents-azure-blob-backend
 
-# Install in development mode
-pip install -e ".[dev]"
+# Install dependencies (requires uv: https://docs.astral.sh/uv/)
+uv sync --group dev
 ```
 
 ## Running Tests
@@ -18,7 +18,7 @@ pip install -e ".[dev]"
 ### Unit tests (no external dependencies)
 
 ```bash
-pytest tests/test_backend_unit.py -v
+uv run pytest tests/test_backend_unit.py -v
 ```
 
 ### Integration tests (requires Azurite)
@@ -37,17 +37,20 @@ azurite-blob --blobPort 10000
 Run integration tests:
 
 ```bash
-pytest tests/test_backend_integration.py -v
+uv run pytest tests/test_backend_integration.py -v
 ```
 
 ## Code Quality
 
 ```bash
 # Lint
-ruff check .
+uv run ruff check .
 
 # Format
-ruff format .
+uv run ruff format .
+
+# Type check
+uv run ty check
 ```
 
 ## Pull Requests
