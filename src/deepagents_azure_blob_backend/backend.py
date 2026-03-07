@@ -6,10 +6,11 @@ import asyncio
 import inspect
 import logging
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any, Optional
 
 import wcmatch.glob as wcglob
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import AzureError, ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob.aio import BlobServiceClient, ContainerClient
 from deepagents.backends.protocol import (
     BackendProtocol,
@@ -23,6 +24,7 @@ from deepagents.backends.protocol import (
 from deepagents.backends.utils import (
     format_content_with_line_numbers,
     perform_string_replacement,
+    validate_path,
 )
 
 from ._path import from_blob_key, get_prefix_for_path, to_blob_key
@@ -124,6 +126,45 @@ class AzureBlobBackend(BackendProtocol):
     def _virtual_path(self, blob_name: str) -> str:
         return from_blob_key(self._config.prefix, blob_name)
 
+    def _validate_file_path(self, path: str) -> str:
+        return validate_path(path)
+
+    def _validate_search_path(self, path: str | None) -> str:
+        return validate_path(path or "/")
+
+    def _relative_path(self, virtual_path: str, base_path: str) -> str | None:
+        if base_path == "/":
+            return virtual_path[1:]
+
+        prefix_with_slash = base_path + "/"
+        if virtual_path.startswith(prefix_with_slash):
+            return virtual_path[len(prefix_with_slash) :]
+        if virtual_path == base_path:
+            return virtual_path.split("/")[-1]
+        return None
+
+    async def _get_listed_blob(self, container: ContainerClient, blob_key: str) -> Any | None:
+        """Return a blob-like object for an exact key if it exists."""
+        blob = container.get_blob_client(blob_key)
+        try:
+            props = await blob.get_blob_properties()
+        except ResourceNotFoundError:
+            return None
+
+        metadata = dict(props.metadata) if props.metadata else None
+        return SimpleNamespace(name=blob_key, size=getattr(props, "size", 0), metadata=metadata)
+
+    async def _list_target_blobs(self, container: ContainerClient, path: str) -> list[Any]:
+        """List blobs for a search path, preferring an exact file match."""
+        if path == "/":
+            return await self._list_blobs(container, to_blob_key(self._config.prefix, "/"))
+
+        exact_blob = await self._get_listed_blob(container, self._blob_key(path))
+        if exact_blob is not None:
+            return [exact_blob]
+
+        return await self._list_blobs(container, get_prefix_for_path(self._config.prefix, path))
+
     async def _blob_exists(self, container: ContainerClient, blob_key: str) -> bool:
         blob = container.get_blob_client(blob_key)
         return await blob.exists()
@@ -151,6 +192,7 @@ class AzureBlobBackend(BackendProtocol):
         content: str,
         *,
         created_at: Optional[str] = None,
+        overwrite: bool = True,
     ) -> None:
         """Upload content to a blob with timestamps in metadata."""
         now = datetime.now(timezone.utc).isoformat()
@@ -161,7 +203,7 @@ class AzureBlobBackend(BackendProtocol):
         blob = container.get_blob_client(blob_key)
         await blob.upload_blob(
             content.encode(self._config.encoding),
-            overwrite=True,
+            overwrite=overwrite,
             metadata=metadata,
         )
 
@@ -220,10 +262,16 @@ class AzureBlobBackend(BackendProtocol):
         Returns:
             Sorted list of `FileInfo` dicts for immediate children.
         """
-        container = await self._get_container()
-        listing_prefix = get_prefix_for_path(self._config.prefix, path)
+        try:
+            normalized_root = self._validate_search_path(path)
+        except ValueError:
+            return []
 
-        blobs = await self._list_blobs(container, listing_prefix)
+        container = await self._get_container()
+        blobs = await self._list_blobs(
+            container,
+            get_prefix_for_path(self._config.prefix, normalized_root),
+        )
         if not blobs:
             return []
 
@@ -231,9 +279,7 @@ class AzureBlobBackend(BackendProtocol):
         subdirs: set[str] = set()
 
         # Normalize the virtual directory path
-        normalized_path = path if path.endswith("/") else path + "/"
-        if not normalized_path.startswith("/"):
-            normalized_path = "/" + normalized_path
+        normalized_path = normalized_root if normalized_root.endswith("/") else normalized_root + "/"
 
         for blob in blobs:
             virtual = self._virtual_path(blob.name)
@@ -291,6 +337,11 @@ class AzureBlobBackend(BackendProtocol):
             File content formatted with line numbers, or an error string if
             the file is not found or the offset is out of range.
         """
+        try:
+            file_path = self._validate_file_path(file_path)
+        except ValueError as exc:
+            return f"Error: Invalid path '{file_path}': {exc}"
+
         container = await self._get_container()
         blob_key = self._blob_key(file_path)
 
@@ -334,16 +385,21 @@ class AzureBlobBackend(BackendProtocol):
             `WriteResult` with the path on success, or an error if the file
             already exists.
         """
+        try:
+            file_path = self._validate_file_path(file_path)
+        except ValueError as exc:
+            return WriteResult(error=f"Invalid path '{file_path}': {exc}")
+
         container = await self._get_container()
         blob_key = self._blob_key(file_path)
 
-        if await self._blob_exists(container, blob_key):
+        try:
+            await self._write_blob(container, blob_key, content, overwrite=False)
+        except ResourceExistsError:
             return WriteResult(
                 error=f"Cannot write to {file_path} because it already exists. "
                 f"Read and then make an edit, or write to a new path."
             )
-
-        await self._write_blob(container, blob_key, content)
         return WriteResult(path=file_path, files_update=None)
 
     # ------------------------------------------------------------------
@@ -380,6 +436,11 @@ class AzureBlobBackend(BackendProtocol):
             `EditResult` with the path and occurrence count on success, or an
             error string if the file is not found or the match is ambiguous.
         """
+        try:
+            file_path = self._validate_file_path(file_path)
+        except ValueError as exc:
+            return EditResult(error=f"Invalid path '{file_path}': {exc}")
+
         container = await self._get_container()
         blob_key = self._blob_key(file_path)
 
@@ -418,32 +479,23 @@ class AzureBlobBackend(BackendProtocol):
         Returns:
             List of `FileInfo` dicts for matching files.
         """
-        container = await self._get_container()
-        listing_prefix = get_prefix_for_path(self._config.prefix, path)
-
-        blobs = await self._list_blobs(container, listing_prefix)
-        if not blobs:
+        try:
+            normalized_path = self._validate_search_path(path)
+        except ValueError:
             return []
 
-        # Normalize the base path for relative matching
-        normalized_path = path if path.startswith("/") else "/" + path
-        normalized_path = normalized_path.rstrip("/") if normalized_path != "/" else "/"
+        container = await self._get_container()
+        blobs = await self._list_target_blobs(container, normalized_path)
+        if not blobs:
+            return []
 
         infos: list[FileInfo] = []
         for blob in blobs:
             virtual = self._virtual_path(blob.name)
 
-            # Compute relative path for glob matching
-            if normalized_path == "/":
-                relative = virtual[1:]  # Remove leading /
-            else:
-                prefix_with_slash = normalized_path + "/"
-                if virtual.startswith(prefix_with_slash):
-                    relative = virtual[len(prefix_with_slash) :]
-                elif virtual == normalized_path:
-                    relative = virtual.split("/")[-1]
-                else:
-                    continue
+            relative = self._relative_path(virtual, normalized_path)
+            if relative is None:
+                continue
 
             if wcglob.globmatch(relative, pattern, flags=wcglob.BRACE | wcglob.GLOBSTAR):
                 modified_at = ""
@@ -487,36 +539,50 @@ class AzureBlobBackend(BackendProtocol):
         Args:
             pattern: Literal substring to search for.
             path: Directory scope for the search (default: ``"/"``).
-            glob: Optional filename glob to pre-filter blobs (e.g.,
-                ``"*.py"``).
+            glob: Optional relative-path glob to pre-filter blobs (e.g.,
+                ``"*.py"`` for direct children or ``"src/**/*.py"``
+                from the search root).
 
         Returns:
-            List of `GrepMatch` dicts with ``path``, ``line``, and ``text``
-            keys, or an empty list if nothing matches.
-        """
-        container = await self._get_container()
-        search_path = path if path is not None else "/"
-        listing_prefix = get_prefix_for_path(self._config.prefix, search_path)
+            On success, a list of `GrepMatch` dicts with ``path``, ``line``,
+            and ``text`` keys, or an empty list if nothing matches.
 
-        blobs = await self._list_blobs(container, listing_prefix)
+            Returns an error string when the search path is invalid or when
+            one or more blobs cannot be read reliably.
+        """
+        try:
+            search_path = self._validate_search_path(path)
+        except ValueError as exc:
+            invalid_path = path if path is not None else "/"
+            return f"Error: Invalid path '{invalid_path}': {exc}"
+
+        container = await self._get_container()
+        blobs = await self._list_target_blobs(container, search_path)
         if not blobs:
             return []
 
-        # Filter by glob pattern on filename if provided
-        if glob:
-            from pathlib import PurePosixPath
+        blob_candidates: list[tuple[Any, str]] = []
+        for blob in blobs:
+            virtual = self._virtual_path(blob.name)
+            relative = self._relative_path(virtual, search_path)
+            if relative is None:
+                continue
+            blob_candidates.append((blob, relative))
 
-            blobs = [
-                b
-                for b in blobs
+        # Filter by glob pattern on relative path if provided
+        if glob:
+            blob_candidates = [
+                (blob, relative)
+                for blob, relative in blob_candidates
                 if wcglob.globmatch(
-                    PurePosixPath(b.name).name,
+                    relative,
                     glob,
-                    flags=wcglob.BRACE,
+                    flags=wcglob.BRACE | wcglob.GLOBSTAR,
                 )
             ]
 
         matches: list[GrepMatch] = []
+        failed_blobs: list[str] = []
 
         # Process blobs concurrently with bounded concurrency
         semaphore = asyncio.Semaphore(self._config.max_concurrency)
@@ -529,8 +595,9 @@ class AzureBlobBackend(BackendProtocol):
                         encoding=self._config.encoding,
                     )
                     content = str(await stream.readall())
-                except Exception:
-                    logger.debug("Failed to read blob %s for grep", blob.name)
+                except (AzureError, UnicodeError) as exc:
+                    logger.warning("Failed to read blob %s for grep: %s", blob.name, exc)
+                    failed_blobs.append(self._virtual_path(blob.name))
                     return []
 
                 virtual = self._virtual_path(blob.name)
@@ -540,9 +607,16 @@ class AzureBlobBackend(BackendProtocol):
                         blob_matches.append({"path": virtual, "line": line_num, "text": line})
                 return blob_matches
 
-        results = await asyncio.gather(*(search_blob(b) for b in blobs))
+        results = await asyncio.gather(*(search_blob(blob) for blob, _ in blob_candidates))
         for blob_matches in results:
             matches.extend(blob_matches)
+
+        if failed_blobs:
+            failed_blobs.sort()
+            sample = ", ".join(failed_blobs[:3])
+            remainder = len(failed_blobs) - min(len(failed_blobs), 3)
+            suffix = f", and {remainder} more" if remainder else ""
+            return f"Error: grep could not read {len(failed_blobs)} file(s): {sample}{suffix}"
 
         return matches
 
@@ -567,6 +641,12 @@ class AzureBlobBackend(BackendProtocol):
         responses: list[FileUploadResponse] = []
 
         for file_path, content in files:
+            try:
+                file_path = self._validate_file_path(file_path)
+            except ValueError:
+                responses.append(FileUploadResponse(path=file_path, error="invalid_path"))
+                continue
+
             blob_key = self._blob_key(file_path)
             now = datetime.now(timezone.utc).isoformat()
             metadata = {"created_at": now, "modified_at": now}
@@ -599,6 +679,12 @@ class AzureBlobBackend(BackendProtocol):
         responses: list[FileDownloadResponse] = []
 
         for file_path in paths:
+            try:
+                file_path = self._validate_file_path(file_path)
+            except ValueError:
+                responses.append(FileDownloadResponse(path=file_path, content=None, error="invalid_path"))
+                continue
+
             blob_key = self._blob_key(file_path)
             try:
                 blob = container.get_blob_client(blob_key)
