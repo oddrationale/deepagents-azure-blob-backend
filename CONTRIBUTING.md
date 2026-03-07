@@ -62,3 +62,9 @@ uv run ty check
 5. Submit a pull request
 
 Please ensure all tests pass and code follows the existing style.
+
+## Releases
+
+After a release PR is merged, `Release Please` will create the GitHub release and trigger the reusable publish workflow automatically.
+
+If you need to run publishing manually after merge, open **Actions** → **Publish to PyPI** → **Run workflow**, then select the release tag (preferred) or `main` as the ref before starting the run.

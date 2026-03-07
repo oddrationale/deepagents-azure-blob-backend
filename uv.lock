@@ -581,12 +581,13 @@ wheels = [
 
 [[package]]
 name = "deepagents-azure-blob-backend"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "azure-identity" },
     { name = "azure-storage-blob", extra = ["aio"] },
     { name = "deepagents" },
+    { name = "wcmatch" },
 ]
 
 [package.dev-dependencies]
@@ -604,6 +605,7 @@ requires-dist = [
     { name = "azure-identity", specifier = ">=1.0.0" },
     { name = "azure-storage-blob", extras = ["aio"], specifier = ">=12.0.0" },
     { name = "deepagents", specifier = ">=0.4.0" },
+    { name = "wcmatch" },
 ]
 
 [package.metadata.requires-dev]
