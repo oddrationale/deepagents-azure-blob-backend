@@ -10,8 +10,7 @@ Prerequisites:
 
 import asyncio
 
-from deepagents import create_agent
-from langchain_anthropic import ChatAnthropic
+from deepagents import create_deep_agent
 
 from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
 
@@ -26,8 +25,7 @@ async def main():
     backend = AzureBlobBackend(config)
 
     # Create a Deep Agent with the Azure backend
-    model = ChatAnthropic(model="claude-sonnet-4-20250514")
-    agent = create_agent(model, backend=backend)
+    agent = create_deep_agent(backend=backend)
 
     # Run the agent
     result = await agent.ainvoke(

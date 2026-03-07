@@ -1,8 +1,7 @@
-"""Example: composite backend with Azure Blob for persistent files.
+"""Example: using AzureBlobBackend with a custom model.
 
-This shows how to combine AzureBlobBackend with the built-in StateBackend
-so agents can use state for ephemeral scratch files while persisting
-important outputs to Azure Blob Storage.
+This shows how to configure an AzureBlobBackend with a specific model
+so agents can read/write files that persist in Azure Blob Storage.
 
 Prerequisites:
     pip install deepagents deepagents-azure-blob-backend langchain-anthropic
@@ -10,7 +9,7 @@ Prerequisites:
 
 import asyncio
 
-from deepagents import create_agent
+from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 
 from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
@@ -25,9 +24,9 @@ async def main():
     )
     azure_backend = AzureBlobBackend(azure_config)
 
-    # Create a Deep Agent with the Azure backend
+    # Create a Deep Agent with a specific model and the Azure backend
     model = ChatAnthropic(model="claude-sonnet-4-20250514")
-    agent = create_agent(model, backend=azure_backend)
+    agent = create_deep_agent(model=model, backend=azure_backend)
 
     # The agent can now read/write files that persist in Azure Blob Storage
     result = await agent.ainvoke(

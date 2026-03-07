@@ -14,8 +14,7 @@ pip install deepagents-azure-blob-backend
 
 ```python
 import asyncio
-from deepagents import create_agent
-from langchain_anthropic import ChatAnthropic
+from deepagents import create_deep_agent
 from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
 
 async def main():
@@ -26,8 +25,7 @@ async def main():
     )
     backend = AzureBlobBackend(config)
 
-    model = ChatAnthropic(model="claude-sonnet-4-20250514")
-    agent = create_agent(model, backend=backend)
+    agent = create_deep_agent(backend=backend)
 
     result = await agent.ainvoke(
         {"messages": [{"role": "user", "content": "Create a hello world script at /hello.py"}]},
