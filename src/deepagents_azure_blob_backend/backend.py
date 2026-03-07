@@ -524,8 +524,11 @@ class AzureBlobBackend(BackendProtocol):
                 ``"*.py"``).
 
         Returns:
-            List of `GrepMatch` dicts with ``path``, ``line``, and ``text``
-            keys, or an empty list if nothing matches.
+            On success, a list of `GrepMatch` dicts with ``path``, ``line``,
+            and ``text`` keys, or an empty list if nothing matches.
+
+            Returns an error string when the search path is invalid or when
+            one or more blobs cannot be read reliably.
         """
         try:
             search_path = self._validate_search_path(path)
