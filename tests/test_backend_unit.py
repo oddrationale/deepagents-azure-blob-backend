@@ -1095,6 +1095,7 @@ class TestAGrepRaw:
         result = await backend.agrep_raw("match", path="/src")
         assert result == []
 
+
 # ------------------------------------------------------------------
 # aupload_files tests
 # ------------------------------------------------------------------
