@@ -10,6 +10,12 @@ Deep Agents exposes a `BackendProtocol` — a pluggable interface for file opera
 pip install deepagents-azure-blob-backend
 ```
 
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv add deepagents-azure-blob-backend
+```
+
 ## Quick Start
 
 ```python
