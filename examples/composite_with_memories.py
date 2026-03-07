@@ -21,7 +21,8 @@ Environment variables:
     AZURE_STORAGE_ACCOUNT_URL        — Use an account URL with DefaultAzureCredential.
     ANTHROPIC_API_KEY                — Required for the default Anthropic model.
 
-    Set either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL. If both are set, the connection string takes priority.
+    Set either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL.
+    If both are set, the connection string takes priority.
 """
 
 import asyncio
