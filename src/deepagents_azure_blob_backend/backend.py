@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import wcmatch.glob as wcglob
@@ -106,9 +106,9 @@ class AzureBlobBackend(BackendProtocol):
         """
         blob = container.get_blob_client(blob_key)
         stream = await blob.download_blob(encoding=self._config.encoding)
-        content = await stream.readall()
+        content = str(await stream.readall())
         props = await blob.get_blob_properties()
-        metadata = props.metadata or {}
+        metadata: dict[str, str] = dict(props.metadata) if props.metadata else {}
         return content, metadata
 
     async def _write_blob(
@@ -120,7 +120,7 @@ class AzureBlobBackend(BackendProtocol):
         created_at: Optional[str] = None,
     ) -> None:
         """Upload content to a blob with timestamps in metadata."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         metadata = {
             "created_at": created_at or now,
             "modified_at": now,
@@ -414,7 +414,7 @@ class AzureBlobBackend(BackendProtocol):
                     stream = await blob_client.download_blob(
                         encoding=self._config.encoding,
                     )
-                    content = await stream.readall()
+                    content = str(await stream.readall())
                 except Exception:
                     logger.debug("Failed to read blob %s for grep", blob.name)
                     return []
@@ -449,7 +449,7 @@ class AzureBlobBackend(BackendProtocol):
 
         for file_path, content in files:
             blob_key = self._blob_key(file_path)
-            now = datetime.now(UTC).isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             metadata = {"created_at": now, "modified_at": now}
 
             try:
@@ -476,9 +476,10 @@ class AzureBlobBackend(BackendProtocol):
             try:
                 blob = container.get_blob_client(blob_key)
                 stream = await blob.download_blob()
-                content = await stream.readall()
+                raw = await stream.readall()
+                content_bytes = raw if isinstance(raw, bytes) else raw.encode("utf-8")
                 responses.append(
-                    FileDownloadResponse(path=file_path, content=content, error=None)
+                    FileDownloadResponse(path=file_path, content=content_bytes, error=None)
                 )
             except ResourceNotFoundError:
                 responses.append(

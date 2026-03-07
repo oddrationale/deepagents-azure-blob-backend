@@ -23,9 +23,9 @@ def build_file_info(
     Returns:
         FileInfo dict.
     """
-    info: FileInfo = {"path": path}
-    info["is_dir"] = is_dir
-    info["size"] = size
-    if modified_at:
-        info["modified_at"] = modified_at
-    return info
+    return {
+        "path": path,
+        "is_dir": is_dir,
+        "size": size,
+        "modified_at": modified_at,
+    }
