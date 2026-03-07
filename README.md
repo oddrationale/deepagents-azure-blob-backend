@@ -78,7 +78,7 @@ For local development with [Azurite](https://learn.microsoft.com/en-us/azure/sto
 ```python
 config = AzureBlobConfig(
     container_name="test",
-    connection_string="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;...",
+    connection_string="UseDevelopmentStorage=true",
 )
 ```
 
@@ -107,9 +107,18 @@ uv sync --group dev
 uv run pytest tests/test_backend_unit.py -v
 
 # Run integration tests (requires Azurite)
-docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite
+docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --skipApiVersionCheck --blobHost 0.0.0.0
 uv run pytest tests/test_backend_integration.py -v
+
+# Lint and format
+uv run ruff check .
+uv run ruff format .
+
+# Type check
+uv run ty check
 ```
+
+See the [examples/](examples/) folder for runnable scripts with setup instructions.
 
 ## License
 

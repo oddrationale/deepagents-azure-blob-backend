@@ -27,11 +27,11 @@ Start Azurite (Azure Storage emulator):
 
 ```bash
 # Using Docker
-docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite
+docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --skipApiVersionCheck --blobHost 0.0.0.0
 
 # Or install via npm
 npm install -g azurite
-azurite-blob --blobPort 10000
+azurite-blob --blobPort 10000 --skipApiVersionCheck
 ```
 
 Run integration tests:
@@ -61,7 +61,7 @@ uv run ty check
 4. Run tests and linting
 5. Submit a pull request
 
-Please ensure all tests pass and code follows the existing style.
+Please ensure all tests pass and code follows the existing style. An [autofix.ci](https://autofix.ci) bot will automatically fix lint and formatting issues on your PR.
 
 ## Releases
 
