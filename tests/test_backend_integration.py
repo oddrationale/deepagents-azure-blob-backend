@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 pytestmark = pytest.mark.integration
@@ -19,6 +21,19 @@ class TestWrite:
         result = await backend.awrite("/exists.txt", "new content")
         assert result.error is not None
         assert "already exists" in result.error
+
+    async def test_concurrent_write_allows_only_one_success(self, backend):
+        results = await asyncio.gather(
+            backend.awrite("/race.txt", "first"),
+            backend.awrite("/race.txt", "second"),
+        )
+
+        succeeded = [result for result in results if result.error is None]
+        failed = [result for result in results if result.error is not None]
+
+        assert len(succeeded) == 1
+        assert len(failed) == 1
+        assert "already exists" in failed[0].error
 
 
 class TestRead:
@@ -153,6 +168,16 @@ class TestGrepRaw:
         paths = [m["path"] for m in matches]
         assert "/mixed/code.py" in paths
         assert "/mixed/notes.md" not in paths
+
+    async def test_grep_with_recursive_path_glob_filter(self, backend):
+        await backend.awrite("/src/top.py", "import os")
+        await backend.awrite("/src/nested/deep.py", "import sys")
+        matches = await backend.agrep_raw("import", "/", glob="src/*/*.py")
+
+        assert isinstance(matches, list)
+        paths = [m["path"] for m in matches]
+        assert "/src/nested/deep.py" in paths
+        assert "/src/top.py" not in paths
 
     async def test_grep_no_matches(self, backend):
         await backend.awrite("/grep_empty/file.txt", "nothing here")

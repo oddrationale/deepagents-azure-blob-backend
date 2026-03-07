@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from azure.core.exceptions import ResourceNotFoundError
+import pytest
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 
 from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
 from deepagents_azure_blob_backend._path import (
@@ -38,6 +39,14 @@ class TestNormalizePath:
 
     def test_empty_string(self):
         assert normalize_path("") == ""
+
+    def test_rejects_path_traversal(self):
+        with pytest.raises(ValueError, match="Path traversal"):
+            normalize_path("/src/../secrets.txt")
+
+    def test_rejects_windows_absolute_path(self):
+        with pytest.raises(ValueError, match="Windows absolute paths"):
+            normalize_path("C:/temp/file.txt")
 
 
 class TestToBlobKey:
@@ -319,6 +328,9 @@ async def _setup_backend_with_container(prefix: str = "pfx/"):
     """
     backend = _make_backend(prefix)
     container = MagicMock()
+    default_blob_client = AsyncMock()
+    default_blob_client.get_blob_properties.side_effect = ResourceNotFoundError("not found")
+    container.get_blob_client.return_value = default_blob_client
     backend._container = container
     backend._client = AsyncMock()
     return backend, container
@@ -606,6 +618,12 @@ class TestARead:
         assert "Error" in result
         assert "offset" in result.lower()
 
+    async def test_read_invalid_path(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.aread("/src/../bad.txt")
+        assert "invalid path" in result.lower()
+
 
 # ------------------------------------------------------------------
 # awrite tests
@@ -616,7 +634,6 @@ class TestAWrite:
     async def test_write_new_file(self):
         backend, container = await _setup_backend_with_container()
         mock_blob = AsyncMock()
-        mock_blob.exists.return_value = False
         mock_blob.upload_blob = AsyncMock()
         container.get_blob_client.return_value = mock_blob
 
@@ -627,12 +644,19 @@ class TestAWrite:
     async def test_write_existing_file_fails(self):
         backend, container = await _setup_backend_with_container()
         mock_blob = AsyncMock()
-        mock_blob.exists.return_value = True
+        mock_blob.upload_blob.side_effect = ResourceExistsError("exists")
         container.get_blob_client.return_value = mock_blob
 
         result = await backend.awrite("/existing.txt", "hello")
         assert result.error is not None
         assert "already exists" in result.error
+
+    async def test_write_invalid_path_fails(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.awrite("/src/../bad.txt", "hello")
+        assert result.error is not None
+        assert "invalid path" in result.error.lower()
 
 
 # ------------------------------------------------------------------
@@ -710,6 +734,13 @@ class TestAEdit:
         result = await backend.aedit("/file.txt", "a", "b", replace_all=True)
         assert result.path == "/file.txt"
         assert result.occurrences == 3
+
+    async def test_edit_invalid_path(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.aedit("/src/../bad.txt", "a", "b")
+        assert result.error is not None
+        assert "invalid path" in result.error.lower()
 
 
 # ------------------------------------------------------------------
@@ -813,6 +844,12 @@ class TestALsInfo:
         assert len(result) == 1
         assert result[0]["modified_at"] == ""
 
+    async def test_ls_invalid_path_returns_empty(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.als_info("/src/../bad")
+        assert result == []
+
 
 # ------------------------------------------------------------------
 # aglob_info tests
@@ -875,16 +912,20 @@ class TestAGlobInfo:
         assert result[0]["modified_at"] == ""
 
     async def test_glob_exact_path_match(self):
-        """Cover line 443-444: virtual == normalized_path."""
+        """Exact file searches should return only the matching blob."""
         backend, container = await _setup_backend_with_container()
-        blob = _make_blob("pfx/src/main.py", size=100, metadata={"modified_at": "t1"})
+        mock_blob_client = AsyncMock()
+        mock_props = MagicMock()
+        mock_props.size = 100
+        mock_props.metadata = {"modified_at": "t1"}
+        mock_blob_client.get_blob_properties.return_value = mock_props
+        container.get_blob_client.return_value = mock_blob_client
+        container.list_blobs = AsyncMock()
 
-        async def fake_list(**kwargs):
-            yield blob
-
-        container.list_blobs = fake_list
         result = await backend.aglob_info("main.py", path="/src/main.py")
         assert len(result) == 1
+        assert result[0]["path"] == "/src/main.py"
+        container.list_blobs.assert_not_called()
 
     async def test_glob_skips_non_matching_prefix(self):
         """Cover lines 445-446: blob outside the search path."""
@@ -893,6 +934,21 @@ class TestAGlobInfo:
 
         async def fake_list(**kwargs):
             yield blob
+
+        container.list_blobs = fake_list
+        result = await backend.aglob_info("*.py", path="/src")
+        assert result == []
+
+    async def test_glob_directory_listing_uses_trailing_slash_prefix(self):
+        backend, container = await _setup_backend_with_container()
+        mock_blob_client = AsyncMock()
+        mock_blob_client.get_blob_properties.side_effect = ResourceNotFoundError("missing")
+        container.get_blob_client.return_value = mock_blob_client
+
+        async def fake_list(**kwargs):
+            assert kwargs["name_starts_with"] == "pfx/src/"
+            return
+            yield
 
         container.list_blobs = fake_list
         result = await backend.aglob_info("*.py", path="/src")
@@ -907,6 +963,12 @@ class TestAGlobInfo:
 
         container.list_blobs = fake_list
         result = await backend.aglob_info("*.py", path="/")
+        assert result == []
+
+    async def test_glob_invalid_path_returns_empty(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.aglob_info("*.py", path="/src/../bad")
         assert result == []
 
 
@@ -955,6 +1017,26 @@ class TestAGrepRaw:
         assert len(result) == 1
         assert result[0]["path"] == "/file.py"
 
+    async def test_grep_with_path_aware_glob_filter(self):
+        backend, container = await _setup_backend_with_container()
+        blob_nested = _make_blob("pfx/src/lib/file.py", size=50)
+        blob_top = _make_blob("pfx/src/file.py", size=50)
+        mock_blob_client = AsyncMock()
+        mock_stream = AsyncMock()
+        mock_stream.readall.return_value = "match here\n"
+        mock_blob_client.download_blob.return_value = mock_stream
+
+        async def fake_list(**kwargs):
+            for blob in [blob_nested, blob_top]:
+                yield blob
+
+        container.list_blobs = fake_list
+        container.get_blob_client.return_value = mock_blob_client
+
+        result = await backend.agrep_raw("match", path="/", glob="src/*/*.py")
+        assert isinstance(result, list)
+        assert [match["path"] for match in result] == ["/src/lib/file.py"]
+
     async def test_grep_no_matches(self):
         backend, container = await _setup_backend_with_container()
         blob = _make_blob("pfx/file.py", size=50)
@@ -987,7 +1069,7 @@ class TestAGrepRaw:
         backend, container = await _setup_backend_with_container()
         blob = _make_blob("pfx/file.py", size=50)
         mock_blob_client = AsyncMock()
-        mock_blob_client.download_blob.side_effect = Exception("read error")
+        mock_blob_client.download_blob.side_effect = ResourceNotFoundError("read error")
 
         async def fake_list(**kwargs):
             yield blob
@@ -996,7 +1078,9 @@ class TestAGrepRaw:
         container.get_blob_client.return_value = mock_blob_client
 
         result = await backend.agrep_raw("pattern")
-        assert result == []
+        assert isinstance(result, str)
+        assert "could not read 1 file" in result.lower()
+        assert "/file.py" in result
 
     async def test_grep_with_path(self):
         backend, container = await _setup_backend_with_container()
@@ -1004,6 +1088,7 @@ class TestAGrepRaw:
         mock_blob_client = AsyncMock()
         mock_stream = AsyncMock()
         mock_stream.readall.return_value = "match\n"
+        mock_blob_client.get_blob_properties.side_effect = ResourceNotFoundError("not found")
         mock_blob_client.download_blob.return_value = mock_stream
 
         async def fake_list(**kwargs):
@@ -1014,6 +1099,43 @@ class TestAGrepRaw:
 
         result = await backend.agrep_raw("match", path="/src")
         assert len(result) == 1
+
+    async def test_grep_exact_path_uses_exact_blob_lookup(self):
+        backend, container = await _setup_backend_with_container()
+        mock_blob_client = AsyncMock()
+        mock_props = MagicMock()
+        mock_props.size = 10
+        mock_props.metadata = {}
+        mock_stream = AsyncMock()
+        mock_stream.readall.return_value = "match\n"
+        mock_blob_client.get_blob_properties.return_value = mock_props
+        mock_blob_client.download_blob.return_value = mock_stream
+        container.get_blob_client.return_value = mock_blob_client
+        container.list_blobs = AsyncMock()
+
+        result = await backend.agrep_raw("match", path="/src/file.py")
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["path"] == "/src/file.py"
+        container.list_blobs.assert_not_called()
+
+    async def test_grep_invalid_path(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.agrep_raw("match", path="/src/../bad")
+        assert isinstance(result, str)
+        assert "invalid path" in result.lower()
+
+    async def test_grep_skips_blobs_outside_requested_path(self):
+        backend, container = await _setup_backend_with_container()
+        blob = _make_blob("pfx/other/file.py", size=50)
+
+        async def fake_list(**kwargs):
+            yield blob
+
+        container.list_blobs = fake_list
+        result = await backend.agrep_raw("match", path="/src")
+        assert result == []
 
 
 # ------------------------------------------------------------------
@@ -1051,6 +1173,12 @@ class TestAUploadFiles:
         result = await backend.aupload_files(files)
         assert len(result) == 2
         assert all(r.error is None for r in result)
+
+    async def test_upload_invalid_path(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.aupload_files([("/src/../bad.bin", b"data")])
+        assert result[0].error == "invalid_path"
 
 
 # ------------------------------------------------------------------
@@ -1094,6 +1222,12 @@ class TestADownloadFiles:
 
         result = await backend.adownload_files(["/file.txt"])
         assert result[0].content == b"string content"
+
+    async def test_download_invalid_path(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.adownload_files(["/src/../bad.txt"])
+        assert result[0].error == "invalid_path"
 
 
 # ------------------------------------------------------------------
