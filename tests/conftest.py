@@ -23,6 +23,7 @@ TEST_CONTAINER = "test-deepagents"
 @pytest.fixture(scope="session")
 async def blob_container():
     """Create a test container in Azurite (session-scoped)."""
+    from azure.core.exceptions import ResourceExistsError
     from azure.storage.blob.aio import BlobServiceClient
 
     async with BlobServiceClient.from_connection_string(
@@ -30,7 +31,7 @@ async def blob_container():
     ) as client:
         try:
             await client.create_container(TEST_CONTAINER)
-        except Exception:
+        except ResourceExistsError:
             pass  # Container may already exist
         yield TEST_CONTAINER
 
