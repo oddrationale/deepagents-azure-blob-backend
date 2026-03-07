@@ -53,25 +53,27 @@ def build_config() -> AzureBlobConfig:
 
 def ensure_container(config: AzureBlobConfig) -> None:
     """Create the blob container if it doesn't already exist."""
-    if config.connection_string:
-        client = BlobServiceClient.from_connection_string(
-            conn_str=config.connection_string,
-            api_version=config.api_version,
-        )
-    else:
-        client = BlobServiceClient(
-            account_url=config.account_url,
-            credential=config.credential,
-            api_version=config.api_version,
-        )
-
+    client = None
     try:
+        if config.connection_string:
+            client = BlobServiceClient.from_connection_string(
+                conn_str=config.connection_string,
+                api_version=config.api_version,
+            )
+        else:
+            client = BlobServiceClient(
+                account_url=config.account_url,
+                credential=config.credential,
+                api_version=config.api_version,
+            )
+
         container = client.get_container_client(config.container_name)
         if not container.exists():
             container.create_container()
             print(f"Created container '{config.container_name}'")
     finally:
-        client.close()
+        if client is not None:
+            client.close()
 
 
 async def main():

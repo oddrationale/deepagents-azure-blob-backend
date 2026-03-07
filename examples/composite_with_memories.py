@@ -87,14 +87,18 @@ async def main():
 
     backend = AzureBlobBackend(config)
 
-    # Seed an AGENTS.md memory file so the agent picks up project conventions
-    await backend.awrite(
+    # Seed an AGENTS.md memory file so the agent picks up project conventions.
+    # Note: awrite will fail if the file already exists; in that case we log a warning
+    # but continue, since an existing AGENTS.md is sufficient for this example.
+    write_result = await backend.awrite(
         ".deepagents/AGENTS.md",
         "# Project Conventions\n\n"
         "- Use snake_case for all Python identifiers\n"
         "- Include docstrings on every public function\n"
         "- Write pytest-style tests\n",
     )
+    if getattr(write_result, "error", None):
+        print(f"Warning: failed to seed .deepagents/AGENTS.md: {write_result.error}")
 
     # Define specialized subagents
     subagents = [
