@@ -621,7 +621,6 @@ class TestARead:
         result = await backend.aread("/src/../bad.txt")
         assert "invalid path" in result.lower()
 
-
 # ------------------------------------------------------------------
 # awrite tests
 # ------------------------------------------------------------------
@@ -654,7 +653,6 @@ class TestAWrite:
         result = await backend.awrite("/src/../bad.txt", "hello")
         assert result.error is not None
         assert "invalid path" in result.error.lower()
-
 
 # ------------------------------------------------------------------
 # aedit tests
@@ -738,7 +736,6 @@ class TestAEdit:
         result = await backend.aedit("/src/../bad.txt", "a", "b")
         assert result.error is not None
         assert "invalid path" in result.error.lower()
-
 
 # ------------------------------------------------------------------
 # als_info tests
@@ -1002,7 +999,6 @@ class TestAGrepRaw:
         result = await backend.agrep_raw("match", path="/", glob="src/*/*.py")
         assert isinstance(result, list)
         assert [match["path"] for match in result] == ["/src/lib/file.py"]
-
     async def test_grep_no_matches(self):
         backend, container = await _setup_backend_with_container()
         blob = _make_blob("pfx/file.py", size=50)
@@ -1072,7 +1068,6 @@ class TestAGrepRaw:
         assert isinstance(result, str)
         assert "invalid path" in result.lower()
 
-
 # ------------------------------------------------------------------
 # aupload_files tests
 # ------------------------------------------------------------------
@@ -1114,7 +1109,6 @@ class TestAUploadFiles:
 
         result = await backend.aupload_files([("/src/../bad.bin", b"data")])
         assert result[0].error == "invalid_path"
-
 
 # ------------------------------------------------------------------
 # adownload_files tests
@@ -1163,7 +1157,6 @@ class TestADownloadFiles:
 
         result = await backend.adownload_files(["/src/../bad.txt"])
         assert result[0].error == "invalid_path"
-
 
 # ------------------------------------------------------------------
 # Sync wrapper tests
