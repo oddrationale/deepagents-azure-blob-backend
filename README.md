@@ -1,5 +1,8 @@
 # deepagents-azure-blob-backend
 
+[![CI](https://github.com/oddrationale/deepagents-azure-blob-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/oddrationale/deepagents-azure-blob-backend/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/oddrationale/deepagents-azure-blob-backend/graph/badge.svg)](https://codecov.io/gh/oddrationale/deepagents-azure-blob-backend)
+
 Azure Blob Storage filesystem backend for [LangChain Deep Agents](https://github.com/langchain-ai/deepagents).
 
 Deep Agents exposes a `BackendProtocol` — a pluggable interface for file operations (`read`, `write`, `edit`, `ls`, `glob`, `grep`) that the agent uses as its virtual filesystem. This package provides a production-ready implementation backed by Azure Blob Storage.
