@@ -5,17 +5,6 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      azurite:
-        image: mcr.microsoft.com/azure-storage/azurite
-        ports:
-          - 10000:10000
-        options: >-
-          --health-cmd "node -e \"require('net').createConnection(10000, 'localhost').on('connect', () => process.exit(0)).on('error', () => process.exit(1))\""
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 10s
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
@@ -26,6 +15,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install and start Azurite
+        run: |
+          npm install -g azurite
+          azurite-blob --skipApiVersionCheck --blobHost 0.0.0.0 --blobPort 10000 &
+          # Wait for Azurite to be ready
+          for i in $(seq 1 30); do
+            node -e "require('net').createConnection(10000, 'localhost').on('connect', () => process.exit(0)).on('error', () => process.exit(1))" && break
+            sleep 1
+          done
       - name: Install dependencies
         run: uv sync --group dev
       - name: Run unit tests
