@@ -22,6 +22,7 @@ class AzureBlobConfig:
         encoding: Text encoding for blob content.
         connection_string: Optional connection string override. When set,
             account_url and credential are ignored. Useful for Azurite testing.
+        api_version: Azure Storage API version string.
     """
 
     account_url: str = ""

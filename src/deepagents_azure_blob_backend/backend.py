@@ -46,6 +46,15 @@ class AzureBlobBackend(BackendProtocol):
     """
 
     def __init__(self, config: AzureBlobConfig) -> None:
+        """Create a new backend instance.
+
+        The Azure SDK clients are **not** created here; they are lazily
+        initialized on the first operation.  Call `close` (or ``await close()``)
+        when done to release network resources.
+
+        Args:
+            config: Backend configuration (connection details, prefix, etc.).
+        """
         self._config = config
         self._client: Optional[BlobServiceClient] = None
         self._container: Optional[ContainerClient] = None
@@ -81,7 +90,11 @@ class AzureBlobBackend(BackendProtocol):
         return self._container
 
     async def close(self) -> None:
-        """Close the underlying Azure SDK clients."""
+        """Close the underlying Azure SDK clients and release network resources.
+
+        Safe to call multiple times. After closing, subsequent operations will
+        lazily re-initialize a new client.
+        """
         if self._client is not None:
             await self._client.close()
             self._client = None
@@ -175,9 +188,21 @@ class AzureBlobBackend(BackendProtocol):
     # ------------------------------------------------------------------
 
     def ls_info(self, path: str) -> list[FileInfo]:
+        """List files and subdirectories at *path* (sync wrapper for `als_info`)."""
         return self._run_async(self.als_info(path))
 
     async def als_info(self, path: str) -> list[FileInfo]:
+        """List files and subdirectories at *path*.
+
+        Directories are synthesized from blob key prefixes — no marker blobs
+        are required.
+
+        Args:
+            path: Virtual directory path (e.g., ``"/src"``).
+
+        Returns:
+            Sorted list of `FileInfo` dicts for immediate children.
+        """
         container = await self._get_container()
         listing_prefix = get_prefix_for_path(self._config.prefix, path)
 
@@ -234,9 +259,21 @@ class AzureBlobBackend(BackendProtocol):
     # ------------------------------------------------------------------
 
     def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
+        """Read a file and return its content with line numbers (sync wrapper for `aread`)."""
         return self._run_async(self.aread(file_path, offset, limit))
 
     async def aread(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
+        """Read a file and return its content with line numbers.
+
+        Args:
+            file_path: Virtual path to the file.
+            offset: Zero-based line offset to start reading from.
+            limit: Maximum number of lines to return.
+
+        Returns:
+            File content formatted with line numbers, or an error string if
+            the file is not found or the offset is out of range.
+        """
         container = await self._get_container()
         blob_key = self._blob_key(file_path)
 
@@ -264,9 +301,22 @@ class AzureBlobBackend(BackendProtocol):
     # ------------------------------------------------------------------
 
     def write(self, file_path: str, content: str) -> WriteResult:
+        """Create a new file (sync wrapper for `awrite`)."""
         return self._run_async(self.awrite(file_path, content))
 
     async def awrite(self, file_path: str, content: str) -> WriteResult:
+        """Create a new file with the given content.
+
+        Fails if the file already exists — use `aedit` to modify existing files.
+
+        Args:
+            file_path: Virtual path for the new file.
+            content: UTF-8 text content to write.
+
+        Returns:
+            `WriteResult` with the path on success, or an error if the file
+            already exists.
+        """
         container = await self._get_container()
         blob_key = self._blob_key(file_path)
 
@@ -290,6 +340,7 @@ class AzureBlobBackend(BackendProtocol):
         new_string: str,
         replace_all: bool = False,
     ) -> EditResult:
+        """Replace text in an existing file (sync wrapper for `aedit`)."""
         return self._run_async(self.aedit(file_path, old_string, new_string, replace_all))
 
     async def aedit(
@@ -299,6 +350,19 @@ class AzureBlobBackend(BackendProtocol):
         new_string: str,
         replace_all: bool = False,
     ) -> EditResult:
+        """Replace text in an existing file.
+
+        Args:
+            file_path: Virtual path to the file.
+            old_string: The exact substring to find.
+            new_string: The replacement text.
+            replace_all: If ``True``, replace every occurrence; otherwise
+                require exactly one match.
+
+        Returns:
+            `EditResult` with the path and occurrence count on success, or an
+            error string if the file is not found or the match is ambiguous.
+        """
         container = await self._get_container()
         blob_key = self._blob_key(file_path)
 
@@ -321,9 +385,22 @@ class AzureBlobBackend(BackendProtocol):
     # ------------------------------------------------------------------
 
     def glob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
+        """Find files matching a glob pattern (sync wrapper for `aglob_info`)."""
         return self._run_async(self.aglob_info(pattern, path))
 
     async def aglob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
+        """Find files matching a glob pattern.
+
+        Supports ``**`` (globstar) and ``{a,b}`` brace expansion via
+        *wcmatch*.
+
+        Args:
+            pattern: Glob pattern relative to *path* (e.g., ``"**/*.py"``).
+            path: Base directory for the search.
+
+        Returns:
+            List of `FileInfo` dicts for matching files.
+        """
         container = await self._get_container()
         listing_prefix = get_prefix_for_path(self._config.prefix, path)
 
@@ -378,6 +455,7 @@ class AzureBlobBackend(BackendProtocol):
         path: str | None = None,
         glob: str | None = None,
     ) -> list[GrepMatch] | str:
+        """Search file contents for a literal substring (sync wrapper for `agrep_raw`)."""
         return self._run_async(self.agrep_raw(pattern, path, glob))
 
     async def agrep_raw(
@@ -386,6 +464,21 @@ class AzureBlobBackend(BackendProtocol):
         path: str | None = None,
         glob: str | None = None,
     ) -> list[GrepMatch] | str:
+        """Search file contents for a literal substring.
+
+        Blobs are downloaded and scanned concurrently (bounded by
+        ``AzureBlobConfig.max_concurrency``).
+
+        Args:
+            pattern: Literal substring to search for.
+            path: Directory scope for the search (default: ``"/"``).
+            glob: Optional filename glob to pre-filter blobs (e.g.,
+                ``"*.py"``).
+
+        Returns:
+            List of `GrepMatch` dicts with ``path``, ``line``, and ``text``
+            keys, or an empty list if nothing matches.
+        """
         container = await self._get_container()
         search_path = path if path is not None else "/"
         listing_prefix = get_prefix_for_path(self._config.prefix, search_path)
@@ -445,11 +538,20 @@ class AzureBlobBackend(BackendProtocol):
     # ------------------------------------------------------------------
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
+        """Upload binary files (sync wrapper for `aupload_files`)."""
         return self._run_async(self.aupload_files(files))
 
     async def aupload_files(
         self, files: list[tuple[str, bytes]]
     ) -> list[FileUploadResponse]:
+        """Upload one or more binary files, overwriting if they exist.
+
+        Args:
+            files: List of ``(path, content_bytes)`` tuples.
+
+        Returns:
+            List of `FileUploadResponse` dicts, one per input file.
+        """
         container = await self._get_container()
         responses: list[FileUploadResponse] = []
 
@@ -469,11 +571,21 @@ class AzureBlobBackend(BackendProtocol):
         return responses
 
     def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
+        """Download files as raw bytes (sync wrapper for `adownload_files`)."""
         return self._run_async(self.adownload_files(paths))
 
     async def adownload_files(
         self, paths: list[str]
     ) -> list[FileDownloadResponse]:
+        """Download one or more files as raw bytes.
+
+        Args:
+            paths: Virtual paths to download.
+
+        Returns:
+            List of `FileDownloadResponse` dicts. Each contains ``content``
+            (bytes) on success, or ``error`` set to ``"file_not_found"``.
+        """
         container = await self._get_container()
         responses: list[FileDownloadResponse] = []
 

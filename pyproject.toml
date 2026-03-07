@@ -24,6 +24,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/oddrationale/deepagents-azure-blob-backend"
+Documentation = "https://oddrationale.github.io/deepagents-azure-blob-backend"
 Repository = "https://github.com/oddrationale/deepagents-azure-blob-backend"
 Issues = "https://github.com/oddrationale/deepagents-azure-blob-backend/issues"
 
@@ -33,6 +34,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pdoc",
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "pytest-cov",
