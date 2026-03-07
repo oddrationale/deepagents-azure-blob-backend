@@ -52,7 +52,7 @@ src/deepagents_azure_blob_backend/
 ## Code Style
 
 - **Build system:** `uv_build` (not setuptools or hatchling)
-- **Python:** 3.9+ compatibility required
+- **Python:** 3.11+ compatibility required
 - **Line length:** 120 characters
 - **Linter:** ruff with rules `E`, `F`, `I`, `W`
 - **Type checker:** ty (Astral's type checker, not mypy)
@@ -99,7 +99,7 @@ Key points:
 ## CI
 
 CI runs on every push and PR:
-1. Unit tests + integration tests across Python 3.9, 3.11, 3.13
+1. Unit tests + integration tests across Python 3.11, 3.12, 3.13
 2. Azurite service container for integration tests
 3. Ruff lint check
 4. ty type check
