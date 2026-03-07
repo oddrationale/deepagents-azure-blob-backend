@@ -16,7 +16,7 @@ Environment variables:
     AZURE_STORAGE_ACCOUNT_URL        — Use an account URL with DefaultAzureCredential.
     ANTHROPIC_API_KEY                — Required for the default Anthropic model.
 
-    Set one of the above. If both are set, the connection string takes priority.
+    Set either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL. If both are set, the connection string takes priority.
 """
 
 import asyncio
@@ -65,11 +65,13 @@ def ensure_container(config: AzureBlobConfig) -> None:
             api_version=config.api_version,
         )
 
-    container = client.get_container_client(config.container_name)
-    if not container.exists():
-        container.create_container()
-        print(f"Created container '{config.container_name}'")
-    client.close()
+    try:
+        container = client.get_container_client(config.container_name)
+        if not container.exists():
+            container.create_container()
+            print(f"Created container '{config.container_name}'")
+    finally:
+        client.close()
 
 
 async def main():

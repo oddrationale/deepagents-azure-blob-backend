@@ -21,7 +21,7 @@ Environment variables:
     AZURE_STORAGE_ACCOUNT_URL        — Use an account URL with DefaultAzureCredential.
     ANTHROPIC_API_KEY                — Required for the default Anthropic model.
 
-    Set one of the above. If both are set, the connection string takes priority.
+    Set either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL. If both are set, the connection string takes priority.
 """
 
 import asyncio
@@ -58,23 +58,27 @@ def build_config() -> AzureBlobConfig:
 
 def ensure_container(config: AzureBlobConfig) -> None:
     """Create the blob container if it doesn't already exist."""
-    if config.connection_string:
-        client = BlobServiceClient.from_connection_string(
-            conn_str=config.connection_string,
-            api_version=config.api_version,
-        )
-    else:
-        client = BlobServiceClient(
-            account_url=config.account_url,
-            credential=config.credential,
-            api_version=config.api_version,
-        )
+    client: BlobServiceClient | None = None
+    try:
+        if config.connection_string:
+            client = BlobServiceClient.from_connection_string(
+                conn_str=config.connection_string,
+                api_version=config.api_version,
+            )
+        else:
+            client = BlobServiceClient(
+                account_url=config.account_url,
+                credential=config.credential,
+                api_version=config.api_version,
+            )
 
-    container = client.get_container_client(config.container_name)
-    if not container.exists():
-        container.create_container()
-        print(f"Created container '{config.container_name}'")
-    client.close()
+        container = client.get_container_client(config.container_name)
+        if not container.exists():
+            container.create_container()
+            print(f"Created container '{config.container_name}'")
+    finally:
+        if client is not None:
+            client.close()
 
 
 async def main():
