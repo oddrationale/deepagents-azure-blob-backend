@@ -841,6 +841,12 @@ class TestALsInfo:
         assert len(result) == 1
         assert result[0]["modified_at"] == ""
 
+    async def test_ls_invalid_path_returns_empty(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.als_info("/src/../bad")
+        assert result == []
+
 
 # ------------------------------------------------------------------
 # aglob_info tests
@@ -935,6 +941,12 @@ class TestAGlobInfo:
 
         container.list_blobs = fake_list
         result = await backend.aglob_info("*.py", path="/")
+        assert result == []
+
+    async def test_glob_invalid_path_returns_empty(self):
+        backend, _ = await _setup_backend_with_container()
+
+        result = await backend.aglob_info("*.py", path="/src/../bad")
         assert result == []
 
 
@@ -1072,6 +1084,16 @@ class TestAGrepRaw:
         assert isinstance(result, str)
         assert "invalid path" in result.lower()
 
+    async def test_grep_skips_blobs_outside_requested_path(self):
+        backend, container = await _setup_backend_with_container()
+        blob = _make_blob("pfx/other/file.py", size=50)
+
+        async def fake_list(**kwargs):
+            yield blob
+
+        container.list_blobs = fake_list
+        result = await backend.agrep_raw("match", path="/src")
+        assert result == []
 
 # ------------------------------------------------------------------
 # aupload_files tests

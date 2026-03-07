@@ -259,8 +259,6 @@ class AzureBlobBackend(BackendProtocol):
 
         # Normalize the virtual directory path
         normalized_path = normalized_root if normalized_root.endswith("/") else normalized_root + "/"
-        if not normalized_path.startswith("/"):
-            normalized_path = "/" + normalized_path
 
         for blob in blobs:
             virtual = self._virtual_path(blob.name)
