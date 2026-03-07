@@ -25,6 +25,9 @@ docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob -
 # Lint
 uv run ruff check .
 
+# Format
+uv run ruff format .
+
 # Type check
 uv run ty check
 
