@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Deep Agents
+    url: https://github.com/langchain-ai/deepagents
+    about: For issues with the Deep Agents framework itself (not the Azure backend).

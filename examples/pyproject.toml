@@ -1,0 +1,13 @@
+[project]
+name = "deepagents-azure-blob-backend-examples"
+version = "0.0.0"
+description = "Examples for deepagents-azure-blob-backend"
+requires-python = ">=3.11"
+dependencies = [
+    "deepagents>=0.4.0",
+    "deepagents-azure-blob-backend",
+    "langchain-anthropic>=0.1.0",
+]
+
+[tool.uv.sources]
+deepagents-azure-blob-backend = { path = ".." }
