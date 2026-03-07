@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
       - name: Generate API docs
-        run: uv run pdoc -o docs/ deepagents_azure_blob_backend
+        run: uv run pdoc -d google -o docs/ deepagents_azure_blob_backend
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/

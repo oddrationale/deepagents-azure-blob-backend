@@ -20,7 +20,7 @@ uv run pytest tests/test_backend_unit.py -v --tb=short
 uv run pytest tests/test_backend_integration.py -v --tb=short
 
 # Start Azurite for integration tests
-docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite
+docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --skipApiVersionCheck --blobHost 0.0.0.0
 
 # Lint
 uv run ruff check .
@@ -55,7 +55,9 @@ src/deepagents_azure_blob_backend/
 - **Python:** 3.11+ compatibility required
 - **Line length:** 120 characters
 - **Linter:** ruff with rules `E`, `F`, `I`, `W`
+- **Formatter:** ruff format
 - **Type checker:** ty (Astral's type checker, not mypy)
+- **Docs:** pdoc with `-d google` (Google-style docstrings)
 - **Private modules:** Prefixed with underscore (`_path.py`, `_utils.py`)
 - **Public API:** Only `AzureBlobBackend` and `AzureBlobConfig` are exported from `__init__.py`
 
@@ -103,3 +105,4 @@ CI runs on every push and PR:
 2. Azurite service container for integration tests
 3. Ruff lint check
 4. ty type check
+5. autofix.ci automatically pushes lint/format fixes to PRs

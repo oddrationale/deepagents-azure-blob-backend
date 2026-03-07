@@ -445,9 +445,7 @@ class AzureBlobBackend(BackendProtocol):
                 else:
                     continue
 
-            if wcglob.globmatch(
-                relative, pattern, flags=wcglob.BRACE | wcglob.GLOBSTAR
-            ):
+            if wcglob.globmatch(relative, pattern, flags=wcglob.BRACE | wcglob.GLOBSTAR):
                 modified_at = ""
                 if blob.metadata:
                     modified_at = blob.metadata.get("modified_at", "")
@@ -539,9 +537,7 @@ class AzureBlobBackend(BackendProtocol):
                 blob_matches: list[GrepMatch] = []
                 for line_num, line in enumerate(content.split("\n"), 1):
                     if pattern in line:  # Literal substring match
-                        blob_matches.append(
-                            {"path": virtual, "line": line_num, "text": line}
-                        )
+                        blob_matches.append({"path": virtual, "line": line_num, "text": line})
                 return blob_matches
 
         results = await asyncio.gather(*(search_blob(b) for b in blobs))
@@ -558,9 +554,7 @@ class AzureBlobBackend(BackendProtocol):
         """Upload binary files (sync wrapper for `aupload_files`)."""
         return self._run_async(self.aupload_files(files))
 
-    async def aupload_files(
-        self, files: list[tuple[str, bytes]]
-    ) -> list[FileUploadResponse]:
+    async def aupload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
         """Upload one or more binary files, overwriting if they exist.
 
         Args:
@@ -591,9 +585,7 @@ class AzureBlobBackend(BackendProtocol):
         """Download files as raw bytes (sync wrapper for `adownload_files`)."""
         return self._run_async(self.adownload_files(paths))
 
-    async def adownload_files(
-        self, paths: list[str]
-    ) -> list[FileDownloadResponse]:
+    async def adownload_files(self, paths: list[str]) -> list[FileDownloadResponse]:
         """Download one or more files as raw bytes.
 
         Args:
@@ -613,14 +605,8 @@ class AzureBlobBackend(BackendProtocol):
                 stream = await blob.download_blob()
                 raw = await stream.readall()
                 content_bytes = raw if isinstance(raw, bytes) else raw.encode("utf-8")
-                responses.append(
-                    FileDownloadResponse(path=file_path, content=content_bytes, error=None)
-                )
+                responses.append(FileDownloadResponse(path=file_path, content=content_bytes, error=None))
             except ResourceNotFoundError:
-                responses.append(
-                    FileDownloadResponse(
-                        path=file_path, content=None, error="file_not_found"
-                    )
-                )
+                responses.append(FileDownloadResponse(path=file_path, content=None, error="file_not_found"))
 
         return responses
