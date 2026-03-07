@@ -90,14 +90,14 @@ All methods from `BackendProtocol`:
 
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+uv sync --group dev
 
 # Run unit tests
-pytest tests/test_backend_unit.py -v
+uv run pytest tests/test_backend_unit.py -v
 
 # Run integration tests (requires Azurite)
 docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite
-pytest tests/test_backend_integration.py -v
+uv run pytest tests/test_backend_integration.py -v
 ```
 
 ## License
