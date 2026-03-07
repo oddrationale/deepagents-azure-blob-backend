@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import logging
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any, Optional
 
 import wcmatch.glob as wcglob
@@ -26,7 +27,7 @@ from deepagents.backends.utils import (
     validate_path,
 )
 
-from ._path import from_blob_key, to_blob_key
+from ._path import from_blob_key, get_prefix_for_path, to_blob_key
 from ._utils import build_file_info
 from .config import AzureBlobConfig
 
@@ -142,8 +143,27 @@ class AzureBlobBackend(BackendProtocol):
             return virtual_path.split("/")[-1]
         return None
 
-    def _listing_prefix(self, path: str) -> str:
-        return to_blob_key(self._config.prefix, "/") if path == "/" else self._blob_key(path)
+    async def _get_listed_blob(self, container: ContainerClient, blob_key: str) -> Any | None:
+        """Return a blob-like object for an exact key if it exists."""
+        blob = container.get_blob_client(blob_key)
+        try:
+            props = await blob.get_blob_properties()
+        except ResourceNotFoundError:
+            return None
+
+        metadata = dict(props.metadata) if props.metadata else None
+        return SimpleNamespace(name=blob_key, size=getattr(props, "size", 0), metadata=metadata)
+
+    async def _list_target_blobs(self, container: ContainerClient, path: str) -> list[Any]:
+        """List blobs for a search path, preferring an exact file match."""
+        if path == "/":
+            return await self._list_blobs(container, to_blob_key(self._config.prefix, "/"))
+
+        exact_blob = await self._get_listed_blob(container, self._blob_key(path))
+        if exact_blob is not None:
+            return [exact_blob]
+
+        return await self._list_blobs(container, get_prefix_for_path(self._config.prefix, path))
 
     async def _blob_exists(self, container: ContainerClient, blob_key: str) -> bool:
         blob = container.get_blob_client(blob_key)
@@ -248,9 +268,10 @@ class AzureBlobBackend(BackendProtocol):
             return []
 
         container = await self._get_container()
-        listing_prefix = self._listing_prefix(normalized_root)
-
-        blobs = await self._list_blobs(container, listing_prefix)
+        blobs = await self._list_blobs(
+            container,
+            get_prefix_for_path(self._config.prefix, normalized_root),
+        )
         if not blobs:
             return []
 
@@ -464,9 +485,7 @@ class AzureBlobBackend(BackendProtocol):
             return []
 
         container = await self._get_container()
-        listing_prefix = self._listing_prefix(normalized_path)
-
-        blobs = await self._list_blobs(container, listing_prefix)
+        blobs = await self._list_target_blobs(container, normalized_path)
         if not blobs:
             return []
 
@@ -520,8 +539,9 @@ class AzureBlobBackend(BackendProtocol):
         Args:
             pattern: Literal substring to search for.
             path: Directory scope for the search (default: ``"/"``).
-            glob: Optional filename glob to pre-filter blobs (e.g.,
-                ``"*.py"``).
+            glob: Optional relative-path glob to pre-filter blobs (e.g.,
+                ``"*.py"`` for direct children or ``"src/**/*.py"``
+                from the search root).
 
         Returns:
             On success, a list of `GrepMatch` dicts with ``path``, ``line``,
@@ -537,9 +557,7 @@ class AzureBlobBackend(BackendProtocol):
             return f"Error: Invalid path '{invalid_path}': {exc}"
 
         container = await self._get_container()
-        listing_prefix = self._listing_prefix(search_path)
-
-        blobs = await self._list_blobs(container, listing_prefix)
+        blobs = await self._list_target_blobs(container, search_path)
         if not blobs:
             return []
 

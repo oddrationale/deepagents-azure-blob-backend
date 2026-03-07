@@ -328,6 +328,9 @@ async def _setup_backend_with_container(prefix: str = "pfx/"):
     """
     backend = _make_backend(prefix)
     container = MagicMock()
+    default_blob_client = AsyncMock()
+    default_blob_client.get_blob_properties.side_effect = ResourceNotFoundError("not found")
+    container.get_blob_client.return_value = default_blob_client
     backend._container = container
     backend._client = AsyncMock()
     return backend, container
@@ -909,16 +912,20 @@ class TestAGlobInfo:
         assert result[0]["modified_at"] == ""
 
     async def test_glob_exact_path_match(self):
-        """Cover line 443-444: virtual == normalized_path."""
+        """Exact file searches should return only the matching blob."""
         backend, container = await _setup_backend_with_container()
-        blob = _make_blob("pfx/src/main.py", size=100, metadata={"modified_at": "t1"})
+        mock_blob_client = AsyncMock()
+        mock_props = MagicMock()
+        mock_props.size = 100
+        mock_props.metadata = {"modified_at": "t1"}
+        mock_blob_client.get_blob_properties.return_value = mock_props
+        container.get_blob_client.return_value = mock_blob_client
+        container.list_blobs = AsyncMock()
 
-        async def fake_list(**kwargs):
-            yield blob
-
-        container.list_blobs = fake_list
         result = await backend.aglob_info("main.py", path="/src/main.py")
         assert len(result) == 1
+        assert result[0]["path"] == "/src/main.py"
+        container.list_blobs.assert_not_called()
 
     async def test_glob_skips_non_matching_prefix(self):
         """Cover lines 445-446: blob outside the search path."""
@@ -927,6 +934,21 @@ class TestAGlobInfo:
 
         async def fake_list(**kwargs):
             yield blob
+
+        container.list_blobs = fake_list
+        result = await backend.aglob_info("*.py", path="/src")
+        assert result == []
+
+    async def test_glob_directory_listing_uses_trailing_slash_prefix(self):
+        backend, container = await _setup_backend_with_container()
+        mock_blob_client = AsyncMock()
+        mock_blob_client.get_blob_properties.side_effect = ResourceNotFoundError("missing")
+        container.get_blob_client.return_value = mock_blob_client
+
+        async def fake_list(**kwargs):
+            assert kwargs["name_starts_with"] == "pfx/src/"
+            return
+            yield
 
         container.list_blobs = fake_list
         result = await backend.aglob_info("*.py", path="/src")
@@ -1066,6 +1088,7 @@ class TestAGrepRaw:
         mock_blob_client = AsyncMock()
         mock_stream = AsyncMock()
         mock_stream.readall.return_value = "match\n"
+        mock_blob_client.get_blob_properties.side_effect = ResourceNotFoundError("not found")
         mock_blob_client.download_blob.return_value = mock_stream
 
         async def fake_list(**kwargs):
@@ -1076,6 +1099,25 @@ class TestAGrepRaw:
 
         result = await backend.agrep_raw("match", path="/src")
         assert len(result) == 1
+
+    async def test_grep_exact_path_uses_exact_blob_lookup(self):
+        backend, container = await _setup_backend_with_container()
+        mock_blob_client = AsyncMock()
+        mock_props = MagicMock()
+        mock_props.size = 10
+        mock_props.metadata = {}
+        mock_stream = AsyncMock()
+        mock_stream.readall.return_value = "match\n"
+        mock_blob_client.get_blob_properties.return_value = mock_props
+        mock_blob_client.download_blob.return_value = mock_stream
+        container.get_blob_client.return_value = mock_blob_client
+        container.list_blobs = AsyncMock()
+
+        result = await backend.agrep_raw("match", path="/src/file.py")
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["path"] == "/src/file.py"
+        container.list_blobs.assert_not_called()
 
     async def test_grep_invalid_path(self):
         backend, _ = await _setup_backend_with_container()
