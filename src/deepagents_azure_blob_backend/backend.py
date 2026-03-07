@@ -55,9 +55,14 @@ class AzureBlobBackend(BackendProtocol):
         if self._container is not None:
             return self._container
 
+        kwargs: dict[str, Any] = {}
+        if self._config.api_version:
+            kwargs["api_version"] = self._config.api_version
+
         if self._config.connection_string:
             self._client = BlobServiceClient.from_connection_string(
                 self._config.connection_string,
+                **kwargs,
             )
         else:
             credential = self._config.credential
@@ -68,6 +73,7 @@ class AzureBlobBackend(BackendProtocol):
             self._client = BlobServiceClient(
                 account_url=self._config.account_url,
                 credential=credential,
+                **kwargs,
             )
         self._container = self._client.get_container_client(
             self._config.container_name,

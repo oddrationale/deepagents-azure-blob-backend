@@ -31,3 +31,4 @@ class AzureBlobConfig:
     max_concurrency: int = 8
     encoding: str = "utf-8"
     connection_string: Optional[str] = None
+    api_version: Optional[str] = None

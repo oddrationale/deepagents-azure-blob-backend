@@ -17,13 +17,18 @@ AZURITE_CONN_STR = os.environ.get(
 
 TEST_CONTAINER = "test-deepagents"
 
+# Pin to an API version supported by the Azurite Docker image.
+AZURITE_API_VERSION = "2025-11-05"
+
 
 @pytest.fixture(scope="session")
 async def blob_container():
     """Create a test container in Azurite (session-scoped)."""
     from azure.storage.blob.aio import BlobServiceClient
 
-    async with BlobServiceClient.from_connection_string(AZURITE_CONN_STR) as client:
+    async with BlobServiceClient.from_connection_string(
+        AZURITE_CONN_STR, api_version=AZURITE_API_VERSION
+    ) as client:
         try:
             await client.create_container(TEST_CONTAINER)
         except Exception:
@@ -41,6 +46,7 @@ async def backend(blob_container):
         container_name=blob_container,
         connection_string=AZURITE_CONN_STR,
         prefix=f"test-{uuid.uuid4().hex[:8]}/",
+        api_version=AZURITE_API_VERSION,
     )
     b = AzureBlobBackend(config)
     yield b
