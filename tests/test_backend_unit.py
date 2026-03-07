@@ -134,7 +134,7 @@ class TestAzureBlobBackendClose:
 
     async def test_close_calls_credential_close(self):
         """close() must await the stored credential's close() coroutine."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock
 
         from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
 
