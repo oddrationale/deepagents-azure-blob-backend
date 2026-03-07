@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -58,6 +59,7 @@ class AzureBlobBackend(BackendProtocol):
         self._config = config
         self._client: Optional[BlobServiceClient] = None
         self._container: Optional[ContainerClient] = None
+        self._credential: Optional[Any] = None
         self._init_lock = asyncio.Lock()
 
     async def _get_container(self) -> ContainerClient:
@@ -85,6 +87,9 @@ class AzureBlobBackend(BackendProtocol):
                     from azure.identity.aio import DefaultAzureCredential
 
                     credential = DefaultAzureCredential()
+                    self._credential = credential
+                elif hasattr(credential, "close") and inspect.iscoroutinefunction(credential.close):
+                    self._credential = credential
                 self._client = BlobServiceClient(
                     account_url=self._config.account_url,
                     credential=credential,
@@ -105,6 +110,9 @@ class AzureBlobBackend(BackendProtocol):
             await self._client.close()
             self._client = None
             self._container = None
+        if self._credential is not None:
+            await self._credential.close()
+            self._credential = None
 
     # ------------------------------------------------------------------
     # Helpers

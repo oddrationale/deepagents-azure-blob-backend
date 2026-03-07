@@ -117,3 +117,140 @@ class TestAzureBlobBackendInit:
         )
         backend = AzureBlobBackend(config)
         assert isinstance(backend, BackendProtocol)
+
+    def test_credential_is_none_on_init(self):
+        from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
+
+        config = AzureBlobConfig(
+            account_url="https://test.blob.core.windows.net",
+            container_name="test",
+        )
+        backend = AzureBlobBackend(config)
+        assert backend._credential is None
+
+
+class TestAzureBlobBackendClose:
+    """Tests for the close() lifecycle of AzureBlobBackend."""
+
+    async def test_close_calls_credential_close(self):
+        """close() must await the stored credential's close() coroutine."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
+
+        config = AzureBlobConfig(
+            account_url="https://test.blob.core.windows.net",
+            container_name="test",
+        )
+        backend = AzureBlobBackend(config)
+
+        mock_credential = AsyncMock()
+        mock_credential.close = AsyncMock()
+        backend._credential = mock_credential
+
+        await backend.close()
+
+        mock_credential.close.assert_awaited_once()
+        assert backend._credential is None
+
+    async def test_close_is_safe_without_credential(self):
+        """close() must not raise when _credential is None."""
+        from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
+
+        config = AzureBlobConfig(
+            account_url="https://test.blob.core.windows.net",
+            container_name="test",
+        )
+        backend = AzureBlobBackend(config)
+        # Should not raise even with no client or credential initialised.
+        await backend.close()
+
+    async def test_get_container_stores_default_credential(self):
+        """When no credential is configured, _get_container() stores the
+        auto-created DefaultAzureCredential on self._credential."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
+
+        config = AzureBlobConfig(
+            account_url="https://test.blob.core.windows.net",
+            container_name="test",
+        )
+        backend = AzureBlobBackend(config)
+
+        mock_credential = AsyncMock()
+        mock_container = MagicMock()
+        mock_client = MagicMock()
+        mock_client.get_container_client.return_value = mock_container
+
+        with (
+            patch(
+                "deepagents_azure_blob_backend.backend.BlobServiceClient",
+                return_value=mock_client,
+            ),
+            patch(
+                "azure.identity.aio.DefaultAzureCredential",
+                return_value=mock_credential,
+            ),
+        ):
+            await backend._get_container()
+
+        assert backend._credential is mock_credential
+
+    async def test_get_container_stores_async_user_credential(self):
+        """When the user supplies an async credential, _get_container() stores
+        it on self._credential so that close() can release its resources."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
+
+        mock_credential = AsyncMock()
+
+        config = AzureBlobConfig(
+            account_url="https://test.blob.core.windows.net",
+            container_name="test",
+            credential=mock_credential,
+        )
+        backend = AzureBlobBackend(config)
+
+        mock_container = MagicMock()
+        mock_client = MagicMock()
+        mock_client.get_container_client.return_value = mock_container
+
+        with patch(
+            "deepagents_azure_blob_backend.backend.BlobServiceClient",
+            return_value=mock_client,
+        ):
+            await backend._get_container()
+
+        assert backend._credential is mock_credential
+
+    async def test_get_container_does_not_store_sync_credential(self):
+        """Sync (non-async) credentials are not stored on self._credential,
+        since they do not own an async HTTP session."""
+        from unittest.mock import MagicMock, patch
+
+        from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
+
+        sync_credential = MagicMock()
+        # Ensure close is a plain (non-coroutine) callable
+        sync_credential.close = MagicMock()
+
+        config = AzureBlobConfig(
+            account_url="https://test.blob.core.windows.net",
+            container_name="test",
+            credential=sync_credential,
+        )
+        backend = AzureBlobBackend(config)
+
+        mock_container = MagicMock()
+        mock_client = MagicMock()
+        mock_client.get_container_client.return_value = mock_container
+
+        with patch(
+            "deepagents_azure_blob_backend.backend.BlobServiceClient",
+            return_value=mock_client,
+        ):
+            await backend._get_container()
+
+        assert backend._credential is None
