@@ -34,7 +34,9 @@ CONTAINER_NAME = "agent-workspace"
 def build_config() -> AzureBlobConfig:
     """Build config from environment variables."""
     connection_string = os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
-    account_url = os.environ.get("AZURE_STORAGE_ACCOUNT_URL")
+    account_url = os.environ.get("AZURE_STORAGE_ACCOUNT_URL", "")
+    account_key = os.environ.get("AZURE_STORAGE_ACCOUNT_KEY")
+    sas_token = os.environ.get("AZURE_STORAGE_SAS_TOKEN")
 
     if connection_string:
         return AzureBlobConfig(
@@ -47,6 +49,8 @@ def build_config() -> AzureBlobConfig:
             account_url=account_url,
             container_name=CONTAINER_NAME,
             prefix="session-001/",
+            account_key=account_key,
+            sas_token=sas_token,
         )
     else:
         raise RuntimeError("Set AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL")

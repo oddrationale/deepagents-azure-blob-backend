@@ -30,9 +30,11 @@ AZURE_STORAGE_CONNECTION_STRING=UseDevelopmentStorage=true
 |---|---|
 | `ANTHROPIC_API_KEY` | Required. Your Anthropic API key. |
 | `AZURE_STORAGE_CONNECTION_STRING` | Use a connection string for auth (e.g. Azurite). |
-| `AZURE_STORAGE_ACCOUNT_URL` | Use an account URL with `DefaultAzureCredential` (e.g. `https://<account>.blob.core.windows.net`). |
+| `AZURE_STORAGE_ACCOUNT_URL` | Use an account URL (required unless using a connection string). |
+| `AZURE_STORAGE_ACCOUNT_KEY` | Authenticate with a storage account key. |
+| `AZURE_STORAGE_SAS_TOKEN` | Authenticate with a SAS token. |
 
-Set either `AZURE_STORAGE_CONNECTION_STRING` or `AZURE_STORAGE_ACCOUNT_URL`. If both are set, the connection string takes priority.
+Set `AZURE_STORAGE_CONNECTION_STRING` **or** `AZURE_STORAGE_ACCOUNT_URL` with one of the credential variables. If a connection string is set, other credential variables are ignored. If no credential variable is set, `DefaultAzureCredential` is used automatically.
 
 The `.env` file is gitignored and will not be committed.
 

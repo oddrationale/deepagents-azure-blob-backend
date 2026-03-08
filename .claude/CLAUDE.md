@@ -51,6 +51,7 @@ src/deepagents_azure_blob_backend/
 - **No directory blobs:** Directories are synthesized from blob name prefixes. There are no marker blobs for directories.
 - **Metadata:** Blobs store `created_at` and `modified_at` as ISO 8601 strings in blob metadata.
 - **Prefix isolation:** Each backend instance can be scoped to a prefix, enabling multi-agent setups on a single container.
+- **Auth validation:** `AzureBlobConfig.__post_init__` enforces that exactly one auth method (connection string, account key, SAS token, credential object, or DefaultAzureCredential) is configured. Conflicting or missing settings raise `ValueError` at construction time.
 
 ## Code Style
 
@@ -66,7 +67,7 @@ src/deepagents_azure_blob_backend/
 
 ## Testing
 
-- **Unit tests** (`test_backend_unit.py`): No I/O, test path normalization, config defaults, and protocol conformance.
+- **Unit tests** (`test_backend_unit.py`): No I/O, test path normalization, config defaults, auth validation, auth client creation, and protocol conformance.
 - **Integration tests** (`test_backend_integration.py`): Require Azurite. Test actual read/write/edit/glob/grep against blob storage.
 - **Async mode:** `asyncio_mode = "auto"` — async test functions are detected automatically.
 - **Isolation:** Each test gets a unique blob prefix via fixtures, so tests don't interfere with each other.
