@@ -17,12 +17,15 @@ Run with:
     uv run --env-file .env composite_with_memories.py
 
 Environment variables:
-    AZURE_STORAGE_CONNECTION_STRING  — Use a connection string (e.g. Azurite).
-    AZURE_STORAGE_ACCOUNT_URL        — Use an account URL with DefaultAzureCredential.
+    AZURE_STORAGE_CONNECTION_STRING  — Connection string (e.g. Azurite). Overrides all others.
+    AZURE_STORAGE_ACCOUNT_URL        — Account URL (required unless using connection string).
+    AZURE_STORAGE_ACCOUNT_KEY        — Storage account key.
+    AZURE_STORAGE_SAS_TOKEN          — SAS token.
     ANTHROPIC_API_KEY                — Required for the default Anthropic model.
 
-    Set either AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL.
-    If both are set, the connection string takes priority.
+    Set AZURE_STORAGE_CONNECTION_STRING *or* AZURE_STORAGE_ACCOUNT_URL with
+    at most one of AZURE_STORAGE_ACCOUNT_KEY / AZURE_STORAGE_SAS_TOKEN.
+    If no credential env var is set, DefaultAzureCredential is used.
 """
 
 import asyncio
@@ -49,16 +52,28 @@ def build_config() -> AzureBlobConfig:
             container_name=CONTAINER_NAME,
             prefix="composite-demo/",
         )
-    elif account_url:
-        return AzureBlobConfig(
-            account_url=account_url,
-            container_name=CONTAINER_NAME,
-            prefix="composite-demo/",
-            account_key=account_key,
-            sas_token=sas_token,
-        )
-    else:
+    if not account_url:
         raise RuntimeError("Set AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_URL")
+
+    # SAS token takes priority over account key if both are set
+    return AzureBlobConfig(
+        account_url=account_url,
+        container_name=CONTAINER_NAME,
+        prefix="composite-demo/",
+        account_key=account_key if not sas_token else None,
+        sas_token=sas_token,
+    )
+
+
+def _resolve_sync_credential(config: AzureBlobConfig):
+    """Return the credential to use with the sync BlobServiceClient."""
+    if config.account_key:
+        return config.account_key
+    if config.sas_token:
+        from azure.core.credentials import AzureSasCredential
+
+        return AzureSasCredential(config.sas_token)
+    return config.credential
 
 
 def ensure_container(config: AzureBlobConfig) -> None:
@@ -73,7 +88,7 @@ def ensure_container(config: AzureBlobConfig) -> None:
         else:
             client = BlobServiceClient(
                 account_url=config.account_url,
-                credential=config.credential,
+                credential=_resolve_sync_credential(config),
                 api_version=config.api_version,
             )
 
