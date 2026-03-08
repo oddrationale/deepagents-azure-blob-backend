@@ -91,17 +91,33 @@ class TestGetPrefixForPath:
 
 
 class TestAzureBlobConfig:
-    def test_defaults(self):
+    def test_defaults_with_account_url(self):
         from deepagents_azure_blob_backend import AzureBlobConfig
 
-        config = AzureBlobConfig()
-        assert config.account_url == ""
+        config = AzureBlobConfig(account_url="https://x.blob.core.windows.net")
+        assert config.account_url == "https://x.blob.core.windows.net"
         assert config.container_name == ""
         assert config.prefix == ""
         assert config.credential is None
+        assert config.account_key is None
+        assert config.sas_token is None
         assert config.max_concurrency == 8
         assert config.encoding == "utf-8"
         assert config.connection_string is None
+
+    def test_defaults_with_connection_string(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        conn_str = "DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;"
+        config = AzureBlobConfig(connection_string=conn_str)
+        assert config.connection_string is not None
+        assert config.account_url == ""
+
+    def test_no_account_url_and_no_connection_string_raises(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="account_url is required"):
+            AzureBlobConfig()
 
     def test_custom_values(self):
         from deepagents_azure_blob_backend import AzureBlobConfig
@@ -116,6 +132,162 @@ class TestAzureBlobConfig:
         assert config.container_name == "mycontainer"
         assert config.prefix == "agent-1/"
         assert config.max_concurrency == 4
+
+    def test_account_key_field(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            account_key="my-key",
+        )
+        assert config.account_key == "my-key"
+
+    def test_sas_token_field(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            sas_token="sv=2021-06-08&ss=b&srt=co&sp=rwdlacitfx&se=2030-01-01",
+        )
+        assert config.sas_token is not None
+
+    def test_conflict_account_key_and_sas_token(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="Only one authentication method"):
+            AzureBlobConfig(
+                account_url="https://x.blob.core.windows.net",
+                account_key="my-key",
+                sas_token="my-sas",
+            )
+
+    def test_conflict_connection_string_and_account_key(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="Only one authentication method"):
+            AzureBlobConfig(
+                connection_string="DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;",
+                account_key="my-key",
+            )
+
+    def test_conflict_credential_and_sas_token(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="Only one authentication method"):
+            AzureBlobConfig(
+                account_url="https://x.blob.core.windows.net",
+                credential=object(),
+                sas_token="my-sas",
+            )
+
+    def test_account_key_requires_account_url(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="account_url is required"):
+            AzureBlobConfig(account_key="my-key")
+
+    def test_sas_token_requires_account_url(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="account_url is required"):
+            AzureBlobConfig(sas_token="my-sas")
+
+
+class TestAuthClientCreation:
+    """Test that _get_container creates the right client for each auth method."""
+
+    async def test_account_key_passed_as_credential(self):
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            container_name="test",
+            account_key="my-account-key",
+        )
+        backend = AzureBlobBackend(config)
+
+        with patch("deepagents_azure_blob_backend.backend.BlobServiceClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get_container_client.return_value = AsyncMock()
+            mock_cls.return_value = mock_client
+
+            await backend._get_container()
+
+            mock_cls.assert_called_once()
+            call_kwargs = mock_cls.call_args
+            assert call_kwargs.kwargs["credential"] == "my-account-key"
+
+        await backend.close()
+
+    async def test_sas_token_wrapped_in_azure_sas_credential(self):
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            container_name="test",
+            sas_token="sv=2021-06-08&ss=b",
+        )
+        backend = AzureBlobBackend(config)
+
+        with (
+            patch("deepagents_azure_blob_backend.backend.BlobServiceClient") as mock_cls,
+            patch("deepagents_azure_blob_backend.backend.AzureSasCredential") as mock_sas_cls,
+        ):
+            mock_sas_instance = MagicMock()
+            mock_sas_cls.return_value = mock_sas_instance
+            mock_client = AsyncMock()
+            mock_client.get_container_client.return_value = AsyncMock()
+            mock_cls.return_value = mock_client
+
+            await backend._get_container()
+
+            mock_sas_cls.assert_called_once_with("sv=2021-06-08&ss=b")
+            call_kwargs = mock_cls.call_args
+            assert call_kwargs.kwargs["credential"] is mock_sas_instance
+
+        await backend.close()
+
+    async def test_connection_string_uses_from_connection_string(self):
+        conn_str = "DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;"
+        config = AzureBlobConfig(
+            container_name="test",
+            connection_string=conn_str,
+        )
+        backend = AzureBlobBackend(config)
+
+        with patch("deepagents_azure_blob_backend.backend.BlobServiceClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get_container_client.return_value = AsyncMock()
+            mock_cls.from_connection_string.return_value = mock_client
+
+            await backend._get_container()
+
+            mock_cls.from_connection_string.assert_called_once()
+            # Regular constructor should NOT be called
+            mock_cls.assert_not_called()
+
+        await backend.close()
+
+    async def test_default_credential_used_when_no_auth(self):
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            container_name="test",
+        )
+        backend = AzureBlobBackend(config)
+
+        with (
+            patch("deepagents_azure_blob_backend.backend.BlobServiceClient") as mock_cls,
+            patch("azure.identity.aio.DefaultAzureCredential") as mock_default_cred,
+        ):
+            mock_cred_instance = AsyncMock()
+            mock_default_cred.return_value = mock_cred_instance
+            mock_client = AsyncMock()
+            mock_client.get_container_client.return_value = AsyncMock()
+            mock_cls.return_value = mock_client
+
+            await backend._get_container()
+
+            mock_default_cred.assert_called_once()
+            call_kwargs = mock_cls.call_args
+            assert call_kwargs.kwargs["credential"] is mock_cred_instance
+
+        await backend.close()
 
 
 # ------------------------------------------------------------------

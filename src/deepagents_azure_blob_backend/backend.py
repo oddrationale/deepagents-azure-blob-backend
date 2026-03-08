@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 import wcmatch.glob as wcglob
+from azure.core.credentials import AzureSasCredential
 from azure.core.exceptions import AzureError, ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob.aio import BlobServiceClient, ContainerClient
 from deepagents.backends.protocol import (
@@ -83,15 +84,33 @@ class AzureBlobBackend(BackendProtocol):
                     self._config.connection_string,
                     **kwargs,
                 )
-            else:
+            elif self._config.account_key:
+                self._client = BlobServiceClient(
+                    account_url=self._config.account_url,
+                    credential=self._config.account_key,
+                    **kwargs,
+                )
+            elif self._config.sas_token:
+                credential = AzureSasCredential(self._config.sas_token)
+                self._client = BlobServiceClient(
+                    account_url=self._config.account_url,
+                    credential=credential,
+                    **kwargs,
+                )
+            elif self._config.credential is not None:
                 credential = self._config.credential
-                if credential is None:
-                    from azure.identity.aio import DefaultAzureCredential
+                if hasattr(credential, "close") and inspect.iscoroutinefunction(credential.close):
+                    self._credential = credential
+                self._client = BlobServiceClient(
+                    account_url=self._config.account_url,
+                    credential=credential,
+                    **kwargs,
+                )
+            else:
+                from azure.identity.aio import DefaultAzureCredential
 
-                    credential = DefaultAzureCredential()
-                    self._credential = credential
-                elif hasattr(credential, "close") and inspect.iscoroutinefunction(credential.close):
-                    self._credential = credential
+                credential = DefaultAzureCredential()
+                self._credential = credential
                 self._client = BlobServiceClient(
                     account_url=self._config.account_url,
                     credential=credential,
