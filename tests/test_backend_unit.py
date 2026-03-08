@@ -243,6 +243,31 @@ class TestAuthClientCreation:
 
         await backend.close()
 
+    async def test_sas_token_leading_question_mark_stripped(self):
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            container_name="test",
+            sas_token="?sv=2021-06-08&ss=b",
+        )
+        backend = AzureBlobBackend(config)
+
+        with (
+            patch("deepagents_azure_blob_backend.backend.BlobServiceClient") as mock_cls,
+            patch("deepagents_azure_blob_backend.backend.AzureSasCredential") as mock_sas_cls,
+        ):
+            mock_sas_instance = MagicMock()
+            mock_sas_cls.return_value = mock_sas_instance
+            mock_client = AsyncMock()
+            mock_client.get_container_client.return_value = AsyncMock()
+            mock_cls.return_value = mock_client
+
+            await backend._get_container()
+
+            # Leading '?' should be stripped before passing to AzureSasCredential
+            mock_sas_cls.assert_called_once_with("sv=2021-06-08&ss=b")
+
+        await backend.close()
+
     async def test_connection_string_uses_from_connection_string(self):
         conn_str = "DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;"
         config = AzureBlobConfig(

@@ -45,7 +45,7 @@ class AzureBlobConfig:
     Mutually exclusive with ``connection_string``, ``sas_token``, and ``credential``."""
 
     sas_token: Optional[str] = None
-    """Shared Access Signature token string (with or without leading ``?``).
+    """Shared Access Signature token string (**without** leading ``?``).
     Mutually exclusive with ``connection_string``, ``account_key``, and ``credential``."""
 
     max_concurrency: int = 8
@@ -62,7 +62,7 @@ class AzureBlobConfig:
     """Azure Storage API version string."""
 
     def __post_init__(self) -> None:
-        """Validate that exactly one authentication method is configured."""
+        """Validate that at most one explicit credential source is configured."""
         cred_sources = [
             ("connection_string", bool(self.connection_string)),
             ("account_key", bool(self.account_key)),

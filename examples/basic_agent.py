@@ -67,8 +67,13 @@ def _resolve_sync_credential(config: AzureBlobConfig):
     if config.sas_token:
         from azure.core.credentials import AzureSasCredential
 
-        return AzureSasCredential(config.sas_token)
-    return config.credential
+        return AzureSasCredential(config.sas_token.lstrip("?"))
+    if config.credential is not None:
+        return config.credential
+    # Fall back to DefaultAzureCredential for AAD-based auth
+    from azure.identity import DefaultAzureCredential
+
+    return DefaultAzureCredential()
 
 
 def ensure_container(config: AzureBlobConfig) -> None:
