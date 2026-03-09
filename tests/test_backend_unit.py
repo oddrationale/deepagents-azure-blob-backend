@@ -222,6 +222,26 @@ class TestAzureBlobConfig:
                 sas_token="",
             )
 
+    def test_sas_token_only_question_marks_raises(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="only '\\?' characters"):
+            AzureBlobConfig(
+                account_url="https://x.blob.core.windows.net",
+                container_name="test",
+                sas_token="???",
+            )
+
+    def test_sas_token_whitespace_stripped(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            container_name="test",
+            sas_token=" ?sv=2021-06-08&ss=b ",
+        )
+        assert config.sas_token == "sv=2021-06-08&ss=b"
+
     def test_empty_string_connection_string_raises(self):
         from deepagents_azure_blob_backend import AzureBlobConfig
 

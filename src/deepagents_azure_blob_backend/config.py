@@ -12,8 +12,8 @@ class AzureBlobConfig:
 
     Five authentication methods are supported (mutually exclusive):
 
-    1. **Connection string** — set ``connection_string``. Other fields
-       (``account_url``, credentials) are ignored when a connection string is used.
+    1. **Connection string** — set ``connection_string`` only.  Do **not** set
+       ``account_url`` or any credential field alongside it.
     2. **Account key** — set ``account_url`` + ``account_key``.
     3. **SAS token** — set ``account_url`` + ``sas_token``.
     4. **Credential object** — set ``account_url`` + ``credential`` (any
@@ -69,9 +69,9 @@ class AzureBlobConfig:
             if value is not None and not value.strip():
                 raise ValueError(f"{field_name} must be None or a non-empty string, got empty string.")
 
-        # Normalize SAS token: strip leading "?" so downstream code doesn't need to
+        # Normalize SAS token: strip whitespace and leading "?" so downstream code doesn't need to
         if self.sas_token is not None:
-            normalized = self.sas_token.lstrip("?")
+            normalized = self.sas_token.strip().lstrip("?").strip()
             if not normalized:
                 raise ValueError("sas_token contains only '?' characters — expected a valid token string.")
             self.sas_token = normalized
