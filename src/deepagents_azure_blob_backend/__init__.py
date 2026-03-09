@@ -18,8 +18,17 @@ backend = AzureBlobBackend(config)
 agent = create_deep_agent(backend=backend)
 ```
 
-See `AzureBlobConfig` for all available configuration options and
-`AzureBlobBackend` for the full API.
+## Authentication
+
+`AzureBlobConfig` supports five mutually exclusive authentication methods:
+
+1. **Connection string** — ``AzureBlobConfig(connection_string="...")``
+2. **Account key** — ``AzureBlobConfig(account_url="...", account_key="...")``
+3. **SAS token** — ``AzureBlobConfig(account_url="...", sas_token="...")``
+4. **Credential object** — ``AzureBlobConfig(account_url="...", credential=my_cred)``
+5. **Default (AAD)** — ``AzureBlobConfig(account_url="...")`` (uses ``DefaultAzureCredential``)
+
+See `AzureBlobConfig` for full details and `AzureBlobBackend` for the API.
 """
 
 from .backend import AzureBlobBackend

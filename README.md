@@ -58,29 +58,52 @@ config = AzureBlobConfig(
     account_url="https://<account>.blob.core.windows.net",
     container_name="my-container",
     prefix="agent-workspace/",     # Namespace isolation for multi-agent setups
-    credential=None,               # None → DefaultAzureCredential()
     max_concurrency=8,             # Parallel blob ops for grep/glob
     encoding="utf-8",
-    connection_string=None,        # Override for Azurite / testing
 )
 ```
 
 ### Authentication
 
-By default, `DefaultAzureCredential` is used, which supports:
-
-- **Local development:** `az login`, environment variables
-- **Azure Container Apps:** Managed identity
-- **GitHub Actions:** Workload identity federation (OIDC)
-
-For local development with [Azurite](https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite), use a connection string:
+`AzureBlobConfig` supports five mutually exclusive authentication methods. Set at most one credential source — if none is provided, `DefaultAzureCredential` is used automatically. `account_url` is required for all methods except connection string:
 
 ```python
+# 1. Connection string (e.g., Azurite or Azure Portal)
 config = AzureBlobConfig(
     container_name="test",
     connection_string="UseDevelopmentStorage=true",
 )
+
+# 2. Account key
+config = AzureBlobConfig(
+    account_url="https://<account>.blob.core.windows.net",
+    container_name="my-container",
+    account_key="your-storage-account-key",
+)
+
+# 3. SAS token
+config = AzureBlobConfig(
+    account_url="https://<account>.blob.core.windows.net",
+    container_name="my-container",
+    sas_token="sv=2021-06-08&ss=b&srt=co&sp=rwdlacitfx&se=...",
+)
+
+# 4. Credential object (any Azure credential)
+from azure.identity.aio import ClientSecretCredential
+config = AzureBlobConfig(
+    account_url="https://<account>.blob.core.windows.net",
+    container_name="my-container",
+    credential=ClientSecretCredential(tenant_id, client_id, client_secret),
+)
+
+# 5. Default (AAD) — omit all credential fields
+config = AzureBlobConfig(
+    account_url="https://<account>.blob.core.windows.net",
+    container_name="my-container",
+)
 ```
+
+The default path uses `DefaultAzureCredential`, which supports `az login`, managed identity, workload identity federation (OIDC), and environment variables.
 
 ## Supported Operations
 
