@@ -79,6 +79,7 @@ def _resolve_sync_credential(config: AzureBlobConfig):
 def ensure_container(config: AzureBlobConfig) -> None:
     """Create the blob container if it doesn't already exist."""
     client = None
+    credential = None
     try:
         if config.connection_string:
             client = BlobServiceClient.from_connection_string(
@@ -86,9 +87,10 @@ def ensure_container(config: AzureBlobConfig) -> None:
                 api_version=config.api_version,
             )
         else:
+            credential = _resolve_sync_credential(config)
             client = BlobServiceClient(
                 account_url=config.account_url,
-                credential=_resolve_sync_credential(config),
+                credential=credential,
                 api_version=config.api_version,
             )
 
@@ -99,6 +101,8 @@ def ensure_container(config: AzureBlobConfig) -> None:
     finally:
         if client is not None:
             client.close()
+        if credential is not None and hasattr(credential, "close"):
+            credential.close()
 
 
 async def main():
