@@ -85,12 +85,12 @@ class AzureBlobConfig:
             )
 
         # connection_string is self-contained and must not be combined with account_url
-        if self.connection_string and self.account_url:
+        if self.connection_string and self.account_url.strip():
             raise ValueError(
                 "connection_string and account_url are mutually exclusive. "
                 "A connection string already contains the account endpoint."
             )
 
         # All other auth paths need account_url
-        if not self.connection_string and not self.account_url:
+        if not self.connection_string and not self.account_url.strip():
             raise ValueError("account_url is required unless connection_string is provided.")
