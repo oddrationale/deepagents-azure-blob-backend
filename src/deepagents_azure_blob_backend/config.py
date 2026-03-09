@@ -71,7 +71,7 @@ class AzureBlobConfig:
 
         # Normalize SAS token: strip whitespace and leading "?" so downstream code doesn't need to
         if self.sas_token is not None:
-            normalized = self.sas_token.strip().lstrip("?").strip()
+            normalized = self.sas_token.strip().lstrip("?")
             if not normalized:
                 raise ValueError("sas_token contains only '?' characters — expected a valid token string.")
             self.sas_token = normalized
