@@ -91,8 +91,7 @@ class AzureBlobBackend(BackendProtocol):
                     **kwargs,
                 )
             elif self._config.sas_token:
-                token = self._config.sas_token.lstrip("?")
-                credential = AzureSasCredential(token)
+                credential = AzureSasCredential(self._config.sas_token)
                 self._client = BlobServiceClient(
                     account_url=self._config.account_url,
                     credential=credential,

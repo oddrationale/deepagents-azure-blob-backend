@@ -45,7 +45,7 @@ class AzureBlobConfig:
     Mutually exclusive with ``connection_string``, ``sas_token``, and ``credential``."""
 
     sas_token: Optional[str] = None
-    """Shared Access Signature token string (a leading ``?`` is accepted and will be stripped).
+    """Shared Access Signature token string (a leading ``?`` is accepted and stripped during validation).
     Mutually exclusive with ``connection_string``, ``account_key``, and ``credential``."""
 
     max_concurrency: int = 8
@@ -68,6 +68,13 @@ class AzureBlobConfig:
             value = getattr(self, field_name)
             if value is not None and not value.strip():
                 raise ValueError(f"{field_name} must be None or a non-empty string, got empty string.")
+
+        # Normalize SAS token: strip leading "?" so downstream code doesn't need to
+        if self.sas_token is not None:
+            normalized = self.sas_token.lstrip("?")
+            if not normalized:
+                raise ValueError("sas_token contains only '?' characters — expected a valid token string.")
+            self.sas_token = normalized
 
         cred_sources = [
             ("connection_string", self.connection_string is not None),
