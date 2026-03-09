@@ -193,6 +193,46 @@ class TestAzureBlobConfig:
             AzureBlobConfig(sas_token="my-sas")
 
 
+    def test_connection_string_with_account_url_raises(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            AzureBlobConfig(
+                account_url="https://x.blob.core.windows.net",
+                container_name="test",
+                connection_string="DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;",
+            )
+
+    def test_empty_string_account_key_raises(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="non-empty string"):
+            AzureBlobConfig(
+                account_url="https://x.blob.core.windows.net",
+                container_name="test",
+                account_key="",
+            )
+
+    def test_empty_string_sas_token_raises(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="non-empty string"):
+            AzureBlobConfig(
+                account_url="https://x.blob.core.windows.net",
+                container_name="test",
+                sas_token="",
+            )
+
+    def test_empty_string_connection_string_raises(self):
+        from deepagents_azure_blob_backend import AzureBlobConfig
+
+        with pytest.raises(ValueError, match="non-empty string"):
+            AzureBlobConfig(
+                container_name="test",
+                connection_string="",
+            )
+
+
 class TestAuthClientCreation:
     """Test that _get_container creates the right client for each auth method."""
 
@@ -498,7 +538,6 @@ class TestBuildFileInfo:
 
 def _make_backend(prefix: str = "pfx/") -> AzureBlobBackend:
     config = AzureBlobConfig(
-        account_url="https://test.blob.core.windows.net",
         container_name="test",
         prefix=prefix,
         connection_string="DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;",

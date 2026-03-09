@@ -65,7 +65,7 @@ config = AzureBlobConfig(
 
 ### Authentication
 
-`AzureBlobConfig` supports five mutually exclusive authentication methods. Set exactly one (or none to use `DefaultAzureCredential`):
+`AzureBlobConfig` supports five mutually exclusive authentication methods. Set at most one credential source — if none is provided, `DefaultAzureCredential` is used automatically. `account_url` is required for all methods except connection string:
 
 ```python
 # 1. Connection string (e.g., Azurite or Azure Portal)

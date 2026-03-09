@@ -12,8 +12,8 @@ class AzureBlobConfig:
 
     Five authentication methods are supported (mutually exclusive):
 
-    1. **Connection string** — set ``connection_string``. Everything else
-       (``account_url``, credentials) is derived from the string.
+    1. **Connection string** — set ``connection_string``. Other fields
+       (``account_url``, credentials) are ignored when a connection string is used.
     2. **Account key** — set ``account_url`` + ``account_key``.
     3. **SAS token** — set ``account_url`` + ``sas_token``.
     4. **Credential object** — set ``account_url`` + ``credential`` (any
@@ -45,7 +45,7 @@ class AzureBlobConfig:
     Mutually exclusive with ``connection_string``, ``sas_token``, and ``credential``."""
 
     sas_token: Optional[str] = None
-    """Shared Access Signature token string (**without** leading ``?``).
+    """Shared Access Signature token string (a leading ``?`` is accepted and will be stripped).
     Mutually exclusive with ``connection_string``, ``account_key``, and ``credential``."""
 
     max_concurrency: int = 8
@@ -63,10 +63,16 @@ class AzureBlobConfig:
 
     def __post_init__(self) -> None:
         """Validate that at most one explicit credential source is configured."""
+        # Reject empty strings — credentials must be None or non-empty
+        for field_name in ("connection_string", "account_key", "sas_token"):
+            value = getattr(self, field_name)
+            if value is not None and not value.strip():
+                raise ValueError(f"{field_name} must be None or a non-empty string, got empty string.")
+
         cred_sources = [
-            ("connection_string", bool(self.connection_string)),
-            ("account_key", bool(self.account_key)),
-            ("sas_token", bool(self.sas_token)),
+            ("connection_string", self.connection_string is not None),
+            ("account_key", self.account_key is not None),
+            ("sas_token", self.sas_token is not None),
             ("credential", self.credential is not None),
         ]
         active = [name for name, is_set in cred_sources if is_set]
@@ -78,6 +84,13 @@ class AzureBlobConfig:
                 f"or omit all to use DefaultAzureCredential."
             )
 
-        # connection_string is self-contained; all other paths need account_url
+        # connection_string is self-contained and must not be combined with account_url
+        if self.connection_string and self.account_url:
+            raise ValueError(
+                "connection_string and account_url are mutually exclusive. "
+                "A connection string already contains the account endpoint."
+            )
+
+        # All other auth paths need account_url
         if not self.connection_string and not self.account_url:
             raise ValueError("account_url is required unless connection_string is provided.")
