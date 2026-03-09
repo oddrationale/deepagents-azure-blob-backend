@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.1.2...deepagents-azure-blob-backend-v0.2.0) (2026-03-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* `AzureBlobConfig()` with no arguments now raises `ValueError` — `account_url` or `connection_string` is required.
+
+### Features
+
+* add first-class SAS token and account key authentication ([#17](https://github.com/oddrationale/deepagents-azure-blob-backend/issues/17)) ([cd19886](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/cd19886bdf7ee4cfe2e9a0aeaf1525d77ee5f6c3))
+
 ## [0.1.2](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.1.1...deepagents-azure-blob-backend-v0.1.2) (2026-03-07)
 
 
