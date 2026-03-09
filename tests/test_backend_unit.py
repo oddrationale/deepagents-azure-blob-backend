@@ -192,7 +192,6 @@ class TestAzureBlobConfig:
         with pytest.raises(ValueError, match="account_url is required"):
             AzureBlobConfig(sas_token="my-sas")
 
-
     def test_connection_string_with_account_url_raises(self):
         from deepagents_azure_blob_backend import AzureBlobConfig
 
