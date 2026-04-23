@@ -292,6 +292,7 @@ class AzureBlobBackend(BackendProtocol):
         A user-supplied credential (``config.credential``) is treated as
         caller-owned and is never closed here.
         """
+
         async def _run_and_cleanup() -> Any:
             state = _ClientState()
             token = _temporary_client_state.set(state)
