@@ -245,21 +245,64 @@ class AzureBlobBackend(BackendProtocol):
     # ------------------------------------------------------------------
 
     def _run_async(self, coro: Any) -> Any:
-        """Run an async coroutine from sync context."""
+        """Run an async coroutine from sync context.
+
+        The cached `ContainerClient`, `BlobServiceClient`, credential, and
+        init lock are all bound to whichever event loop was running when they
+        were lazily created (aiohttp sessions and `asyncio.Lock` capture their
+        loop on first use). Running ``coro`` inside `asyncio.run()` always
+        creates a *new* loop, so reusing the cached state across that
+        boundary raises ``RuntimeError: got Future attached to a different
+        loop``.
+
+        To stay safe, save the caller-side cache, swap in a fresh slate for
+        the duration of the call, close anything the coroutine lazily
+        initialised in the temporary loop, then restore the original cache.
+        """
+        saved_client = self._client
+        saved_container = self._container
+        saved_credential = self._credential
+        saved_lock = self._init_lock
+        self._client = None
+        self._container = None
+        self._credential = None
+        self._init_lock = asyncio.Lock()
+
+        async def _run_and_cleanup() -> Any:
+            try:
+                return await coro
+            finally:
+                if self._client is not None:
+                    try:
+                        await self._client.close()
+                    except Exception:  # noqa: BLE001
+                        logger.debug("Error closing temporary client", exc_info=True)
+                if self._credential is not None:
+                    try:
+                        await self._credential.close()
+                    except Exception:  # noqa: BLE001
+                        logger.debug("Error closing temporary credential", exc_info=True)
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = None
 
-        if loop is not None and loop.is_running():
-            # Already inside an event loop — cannot use asyncio.run().
-            # Create a new thread with its own loop.
-            import concurrent.futures
+        try:
+            if loop is not None and loop.is_running():
+                # Already inside an event loop — cannot use asyncio.run().
+                # Create a new thread with its own loop.
+                import concurrent.futures
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, coro)
-                return future.result()
-        return asyncio.run(coro)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(asyncio.run, _run_and_cleanup())
+                    return future.result()
+            return asyncio.run(_run_and_cleanup())
+        finally:
+            self._client = saved_client
+            self._container = saved_container
+            self._credential = saved_credential
+            self._init_lock = saved_lock
 
     # ------------------------------------------------------------------
     # ls_info

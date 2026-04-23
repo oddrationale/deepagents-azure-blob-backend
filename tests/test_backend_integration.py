@@ -200,3 +200,41 @@ class TestUploadDownload:
         responses = await backend.adownload_files(["/nope/file.bin"])
         assert responses[0].error == "file_not_found"
         assert responses[0].content is None
+
+
+class TestSyncWrappersFromAsync:
+    """Sync wrappers must work when invoked from a worker thread spawned by
+    `asyncio.to_thread` after the cached client has already been initialised
+    in the main event loop. Regression test for issue #29.
+    """
+
+    async def test_sync_wrappers_after_async_init(self, backend):
+        # Lazily initialise the cached ContainerClient inside this loop.
+        await backend.awrite("/sync/hello.txt", "hello world TODO")
+
+        # Each of these previously raised
+        # "RuntimeError: got Future attached to a different loop" because
+        # `_run_async` reused the cached client across event loops.
+        assert await asyncio.to_thread(backend.read, "/sync/hello.txt")
+        assert (await asyncio.to_thread(backend.write, "/sync/two.txt", "data")).error is None
+        assert (await asyncio.to_thread(backend.edit, "/sync/hello.txt", "TODO", "DONE")).error is None
+
+        infos = await asyncio.to_thread(backend.ls_info, "/sync")
+        assert any(fi.get("path") == "/sync/hello.txt" for fi in infos)
+
+        infos = await asyncio.to_thread(backend.glob_info, "**/*.txt", "/sync")
+        assert {fi.get("path") for fi in infos} >= {"/sync/hello.txt", "/sync/two.txt"}
+
+        matches = await asyncio.to_thread(backend.grep_raw, "DONE", "/sync", None)
+        assert isinstance(matches, list)
+        assert any(m.get("path") == "/sync/hello.txt" for m in matches)
+
+        upload = await asyncio.to_thread(backend.upload_files, [("/sync/three.bin", b"payload")])
+        assert upload[0].error is None  # Previously masked as "permission_denied".
+
+        download = await asyncio.to_thread(backend.download_files, ["/sync/three.bin"])
+        assert download[0].error is None
+        assert download[0].content == b"payload"
+
+        # Async path still works after the sync calls — cache survives.
+        assert (await backend.aread("/sync/hello.txt")).strip() != ""
