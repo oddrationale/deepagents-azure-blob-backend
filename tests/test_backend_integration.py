@@ -215,7 +215,11 @@ class TestSyncWrappersFromAsync:
         # Each of these previously raised
         # "RuntimeError: got Future attached to a different loop" because
         # `_run_async` reused the cached client across event loops.
-        assert await asyncio.to_thread(backend.read, "/sync/hello.txt")
+        # `read` returns "Error: ..." strings on failure, so check content.
+        read_content = await asyncio.to_thread(backend.read, "/sync/hello.txt")
+        assert not read_content.startswith("Error:")
+        assert "hello world TODO" in read_content
+
         assert (await asyncio.to_thread(backend.write, "/sync/two.txt", "data")).error is None
         assert (await asyncio.to_thread(backend.edit, "/sync/hello.txt", "TODO", "DONE")).error is None
 
@@ -237,4 +241,28 @@ class TestSyncWrappersFromAsync:
         assert download[0].content == b"payload"
 
         # Async path still works after the sync calls — cache survives.
-        assert (await backend.aread("/sync/hello.txt")).strip() != ""
+        recovered = await backend.aread("/sync/hello.txt")
+        assert not recovered.startswith("Error:")
+        assert "hello world DONE" in recovered
+
+    async def test_concurrent_sync_wrappers_after_async_init(self, backend):
+        # Concurrent sync calls from multiple threads must not corrupt the
+        # save/swap/restore sequence in `_run_async`. Without serialisation,
+        # interleaving threads would either nuke the cached client or close
+        # one another's temporary clients.
+        await backend.awrite("/concurrent/a.txt", "alpha")
+        await backend.awrite("/concurrent/b.txt", "bravo")
+        await backend.awrite("/concurrent/c.txt", "charlie")
+
+        results = await asyncio.gather(
+            asyncio.to_thread(backend.read, "/concurrent/a.txt"),
+            asyncio.to_thread(backend.read, "/concurrent/b.txt"),
+            asyncio.to_thread(backend.read, "/concurrent/c.txt"),
+        )
+        for content, expected in zip(results, ("alpha", "bravo", "charlie"), strict=True):
+            assert not content.startswith("Error:")
+            assert expected in content
+
+        # Cache must still be usable from the original loop afterwards.
+        recovered = await backend.aread("/concurrent/a.txt")
+        assert "alpha" in recovered

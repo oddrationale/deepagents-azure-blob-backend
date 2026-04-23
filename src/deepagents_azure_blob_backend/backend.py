@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import threading
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -64,6 +65,10 @@ class AzureBlobBackend(BackendProtocol):
         self._container: Optional[ContainerClient] = None
         self._credential: Optional[Any] = None
         self._init_lock = asyncio.Lock()
+        # Serializes the save/swap/restore sequence in `_run_async` so that
+        # concurrent sync-wrapper invocations from different threads don't
+        # corrupt the cached client state.
+        self._run_async_lock = threading.Lock()
 
     async def _get_container(self) -> ContainerClient:
         """Lazily initialise and return the container client."""
@@ -258,51 +263,63 @@ class AzureBlobBackend(BackendProtocol):
         To stay safe, save the caller-side cache, swap in a fresh slate for
         the duration of the call, close anything the coroutine lazily
         initialised in the temporary loop, then restore the original cache.
+        The save/swap/restore sequence is serialised by ``_run_async_lock``
+        so concurrent sync-wrapper calls from multiple threads can't
+        interleave on the shared instance state.
+
+        A user-supplied credential (``config.credential``) is treated as
+        caller-owned and is never closed here, even if `_get_container`
+        stored it on ``self._credential`` during the temporary call.
         """
-        saved_client = self._client
-        saved_container = self._container
-        saved_credential = self._credential
-        saved_lock = self._init_lock
-        self._client = None
-        self._container = None
-        self._credential = None
-        self._init_lock = asyncio.Lock()
+        with self._run_async_lock:
+            saved_client = self._client
+            saved_container = self._container
+            saved_credential = self._credential
+            saved_lock = self._init_lock
+            user_credential = self._config.credential
+            self._client = None
+            self._container = None
+            self._credential = None
+            self._init_lock = asyncio.Lock()
 
-        async def _run_and_cleanup() -> Any:
+            async def _run_and_cleanup() -> Any:
+                try:
+                    return await coro
+                finally:
+                    if self._client is not None:
+                        try:
+                            await self._client.close()
+                        except Exception:  # noqa: BLE001
+                            logger.debug("Error closing temporary client", exc_info=True)
+                    # Only close credentials we created ourselves
+                    # (e.g. DefaultAzureCredential). Skip user-supplied
+                    # credentials so we don't tear down caller-owned state.
+                    if self._credential is not None and self._credential is not user_credential:
+                        try:
+                            await self._credential.close()
+                        except Exception:  # noqa: BLE001
+                            logger.debug("Error closing temporary credential", exc_info=True)
+
             try:
-                return await coro
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            try:
+                if loop is not None and loop.is_running():
+                    # Already inside an event loop — cannot use asyncio.run().
+                    # Create a new thread with its own loop.
+                    import concurrent.futures
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(asyncio.run, _run_and_cleanup())
+                        return future.result()
+                return asyncio.run(_run_and_cleanup())
             finally:
-                if self._client is not None:
-                    try:
-                        await self._client.close()
-                    except Exception:  # noqa: BLE001
-                        logger.debug("Error closing temporary client", exc_info=True)
-                if self._credential is not None:
-                    try:
-                        await self._credential.close()
-                    except Exception:  # noqa: BLE001
-                        logger.debug("Error closing temporary credential", exc_info=True)
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop is not None and loop.is_running():
-                # Already inside an event loop — cannot use asyncio.run().
-                # Create a new thread with its own loop.
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, _run_and_cleanup())
-                    return future.result()
-            return asyncio.run(_run_and_cleanup())
-        finally:
-            self._client = saved_client
-            self._container = saved_container
-            self._credential = saved_credential
-            self._init_lock = saved_lock
+                self._client = saved_client
+                self._container = saved_container
+                self._credential = saved_credential
+                self._init_lock = saved_lock
 
     # ------------------------------------------------------------------
     # ls_info
