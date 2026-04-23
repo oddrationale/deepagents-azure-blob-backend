@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import inspect
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -33,6 +36,21 @@ from ._utils import build_file_info
 from .config import AzureBlobConfig
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ClientState:
+    client: Optional[BlobServiceClient] = None
+    container: Optional[ContainerClient] = None
+    credential: Optional[Any] = None
+    init_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    user_credential: Optional[Any] = None
+
+
+_temporary_client_states: contextvars.ContextVar[dict[int, _ClientState] | None] = contextvars.ContextVar(
+    "deepagents_azure_blob_backend_temporary_client_states",
+    default=None,
+)
 
 
 class AzureBlobBackend(BackendProtocol):
@@ -67,32 +85,48 @@ class AzureBlobBackend(BackendProtocol):
 
     async def _get_container(self) -> ContainerClient:
         """Lazily initialise and return the container client."""
-        if self._container is not None:
-            return self._container
-
-        async with self._init_lock:
-            # Double-checked locking to avoid races when lazily initialising
+        temporary_states = _temporary_client_states.get()
+        if temporary_states is None:
+            state = None
             if self._container is not None:
                 return self._container
+            init_lock = self._init_lock
+        else:
+            state = temporary_states.get(id(self))
+            if state is None:
+                state = _ClientState(user_credential=self._config.credential)
+                temporary_states[id(self)] = state
+            if state.container is not None:
+                return state.container
+            init_lock = state.init_lock
+
+        async with init_lock:
+            # Double-checked locking to avoid races when lazily initialising
+            if state is None:
+                if self._container is not None:
+                    return self._container
+            elif state.container is not None:
+                return state.container
 
             kwargs: dict[str, Any] = {}
             if self._config.api_version:
                 kwargs["api_version"] = self._config.api_version
 
+            stored_credential: Any | None = None
             if self._config.connection_string:
-                self._client = BlobServiceClient.from_connection_string(
+                client = BlobServiceClient.from_connection_string(
                     self._config.connection_string,
                     **kwargs,
                 )
             elif self._config.account_key:
-                self._client = BlobServiceClient(
+                client = BlobServiceClient(
                     account_url=self._config.account_url,
                     credential=self._config.account_key,
                     **kwargs,
                 )
             elif self._config.sas_token:
                 credential = AzureSasCredential(self._config.sas_token)
-                self._client = BlobServiceClient(
+                client = BlobServiceClient(
                     account_url=self._config.account_url,
                     credential=credential,
                     **kwargs,
@@ -100,8 +134,8 @@ class AzureBlobBackend(BackendProtocol):
             elif self._config.credential is not None:
                 credential = self._config.credential
                 if hasattr(credential, "close") and inspect.iscoroutinefunction(credential.close):
-                    self._credential = credential
-                self._client = BlobServiceClient(
+                    stored_credential = credential
+                client = BlobServiceClient(
                     account_url=self._config.account_url,
                     credential=credential,
                     **kwargs,
@@ -110,16 +144,23 @@ class AzureBlobBackend(BackendProtocol):
                 from azure.identity.aio import DefaultAzureCredential
 
                 credential = DefaultAzureCredential()
-                self._credential = credential
-                self._client = BlobServiceClient(
+                stored_credential = credential
+                client = BlobServiceClient(
                     account_url=self._config.account_url,
                     credential=credential,
                     **kwargs,
                 )
-            self._container = self._client.get_container_client(
-                self._config.container_name,
-            )
-            return self._container
+
+            container = client.get_container_client(self._config.container_name)
+            if state is None:
+                self._client = client
+                self._credential = stored_credential
+                self._container = container
+            else:
+                state.client = client
+                state.credential = stored_credential
+                state.container = container
+            return container
 
     async def close(self) -> None:
         """Close the underlying Azure SDK clients and release network resources.
@@ -244,8 +285,47 @@ class AzureBlobBackend(BackendProtocol):
     # Sync wrappers
     # ------------------------------------------------------------------
 
-    def _run_async(self, coro: Any) -> Any:
-        """Run an async coroutine from sync context."""
+    def _run_async(self, coro_factory: Callable[[], Awaitable[Any]]) -> Any:
+        """Run an async coroutine from sync context.
+
+        Sync wrappers run the coroutine in a fresh event loop. Azure async
+        clients are loop-affine, so `_get_container` uses context-local
+        temporary client state while the coroutine runs instead of reusing or
+        mutating instance-level async caches. The coroutine is constructed
+        after the context is installed so Python versions that bind coroutine
+        context at creation still see the temporary state.
+
+        A user-supplied credential (``config.credential``) is treated as
+        caller-owned and is never closed here. If that credential is an async
+        Azure Identity credential that has already been used in another loop,
+        the sync wrappers cannot make it cross-loop safe. For sync-wrapper use,
+        prefer ``connection_string``, ``account_key``, ``sas_token``, or omit
+        ``credential`` so the backend creates a fresh ``DefaultAzureCredential``
+        inside each temporary loop.
+        """
+
+        async def _run_and_cleanup() -> Any:
+            states: dict[int, _ClientState] = {}
+            token = _temporary_client_states.set(states)
+            try:
+                return await coro_factory()
+            finally:
+                for state in states.values():
+                    if state.client is not None:
+                        try:
+                            await state.client.close()
+                        except Exception:  # noqa: BLE001
+                            logger.warning("Error closing temporary client", exc_info=True)
+                    # Only close credentials we created ourselves
+                    # (e.g. DefaultAzureCredential). Skip user-supplied
+                    # credentials so we don't tear down caller-owned state.
+                    if state.credential is not None and state.credential is not state.user_credential:
+                        try:
+                            await state.credential.close()
+                        except Exception:  # noqa: BLE001
+                            logger.warning("Error closing temporary credential", exc_info=True)
+                _temporary_client_states.reset(token)
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -257,9 +337,9 @@ class AzureBlobBackend(BackendProtocol):
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, coro)
+                future = pool.submit(asyncio.run, _run_and_cleanup())
                 return future.result()
-        return asyncio.run(coro)
+        return asyncio.run(_run_and_cleanup())
 
     # ------------------------------------------------------------------
     # ls_info
@@ -267,7 +347,7 @@ class AzureBlobBackend(BackendProtocol):
 
     def ls_info(self, path: str) -> list[FileInfo]:
         """List files and subdirectories at *path* (sync wrapper for `als_info`)."""
-        return self._run_async(self.als_info(path))
+        return self._run_async(lambda: self.als_info(path))
 
     async def als_info(self, path: str) -> list[FileInfo]:
         """List files and subdirectories at *path*.
@@ -342,7 +422,7 @@ class AzureBlobBackend(BackendProtocol):
 
     def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
         """Read a file and return its content with line numbers (sync wrapper for `aread`)."""
-        return self._run_async(self.aread(file_path, offset, limit))
+        return self._run_async(lambda: self.aread(file_path, offset, limit))
 
     async def aread(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
         """Read a file and return its content with line numbers.
@@ -389,7 +469,7 @@ class AzureBlobBackend(BackendProtocol):
 
     def write(self, file_path: str, content: str) -> WriteResult:
         """Create a new file (sync wrapper for `awrite`)."""
-        return self._run_async(self.awrite(file_path, content))
+        return self._run_async(lambda: self.awrite(file_path, content))
 
     async def awrite(self, file_path: str, content: str) -> WriteResult:
         """Create a new file with the given content.
@@ -433,7 +513,7 @@ class AzureBlobBackend(BackendProtocol):
         replace_all: bool = False,
     ) -> EditResult:
         """Replace text in an existing file (sync wrapper for `aedit`)."""
-        return self._run_async(self.aedit(file_path, old_string, new_string, replace_all))
+        return self._run_async(lambda: self.aedit(file_path, old_string, new_string, replace_all))
 
     async def aedit(
         self,
@@ -483,7 +563,7 @@ class AzureBlobBackend(BackendProtocol):
 
     def glob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
         """Find files matching a glob pattern (sync wrapper for `aglob_info`)."""
-        return self._run_async(self.aglob_info(pattern, path))
+        return self._run_async(lambda: self.aglob_info(pattern, path))
 
     async def aglob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
         """Find files matching a glob pattern.
@@ -542,7 +622,7 @@ class AzureBlobBackend(BackendProtocol):
         glob: str | None = None,
     ) -> list[GrepMatch] | str:
         """Search file contents for a literal substring (sync wrapper for `agrep_raw`)."""
-        return self._run_async(self.agrep_raw(pattern, path, glob))
+        return self._run_async(lambda: self.agrep_raw(pattern, path, glob))
 
     async def agrep_raw(
         self,
@@ -645,7 +725,7 @@ class AzureBlobBackend(BackendProtocol):
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
         """Upload binary files (sync wrapper for `aupload_files`)."""
-        return self._run_async(self.aupload_files(files))
+        return self._run_async(lambda: self.aupload_files(files))
 
     async def aupload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
         """Upload one or more binary files, overwriting if they exist.
@@ -682,7 +762,7 @@ class AzureBlobBackend(BackendProtocol):
 
     def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
         """Download files as raw bytes (sync wrapper for `adownload_files`)."""
-        return self._run_async(self.adownload_files(paths))
+        return self._run_async(lambda: self.adownload_files(paths))
 
     async def adownload_files(self, paths: list[str]) -> list[FileDownloadResponse]:
         """Download one or more files as raw bytes.
