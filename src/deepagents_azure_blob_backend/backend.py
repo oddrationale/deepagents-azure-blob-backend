@@ -296,7 +296,12 @@ class AzureBlobBackend(BackendProtocol):
         context at creation still see the temporary state.
 
         A user-supplied credential (``config.credential``) is treated as
-        caller-owned and is never closed here.
+        caller-owned and is never closed here. If that credential is an async
+        Azure Identity credential that has already been used in another loop,
+        the sync wrappers cannot make it cross-loop safe. For sync-wrapper use,
+        prefer ``connection_string``, ``account_key``, ``sas_token``, or omit
+        ``credential`` so the backend creates a fresh ``DefaultAzureCredential``
+        inside each temporary loop.
         """
 
         async def _run_and_cleanup() -> Any:
