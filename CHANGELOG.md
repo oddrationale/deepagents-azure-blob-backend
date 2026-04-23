@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.2.0...deepagents-azure-blob-backend-v0.2.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* isolate sync wrapper event loops from cached client ([#30](https://github.com/oddrationale/deepagents-azure-blob-backend/issues/30)) ([d01157a](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/d01157a00a0ac29079d7d6dbf18434fca875c8be))
+* remediate dependabot alerts ([#32](https://github.com/oddrationale/deepagents-azure-blob-backend/issues/32)) ([6fb2601](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/6fb2601bb2aa3d7a008c0e6fe389325280f16e6c))
+
 ## [0.2.0](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.1.2...deepagents-azure-blob-backend-v0.2.0) (2026-03-09)
 
 
