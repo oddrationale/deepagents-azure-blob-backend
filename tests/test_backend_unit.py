@@ -795,6 +795,95 @@ class TestRunAsync:
         result = asyncio.run(outer())
         assert result == 99
 
+    def test_run_async_closes_temporary_client(self):
+        """A client lazily created inside the temporary loop is closed on cleanup."""
+        backend = _make_backend()
+        fake_client = AsyncMock()
+
+        async def coro():
+            backend._client = fake_client
+            return "ok"
+
+        assert backend._run_async(coro()) == "ok"
+        fake_client.close.assert_awaited_once()
+
+    def test_run_async_swallows_client_close_errors(self):
+        """An error closing the temporary client is logged and swallowed."""
+        backend = _make_backend()
+        fake_client = AsyncMock()
+        fake_client.close.side_effect = RuntimeError("boom")
+
+        async def coro():
+            backend._client = fake_client
+            return "ok"
+
+        # Must not raise even though close() blew up.
+        assert backend._run_async(coro()) == "ok"
+        fake_client.close.assert_awaited_once()
+
+    def test_run_async_closes_temporary_credential(self):
+        """A credential lazily created inside the temporary loop is closed."""
+        backend = _make_backend()
+        fake_credential = AsyncMock()
+
+        async def coro():
+            backend._credential = fake_credential
+            return "ok"
+
+        assert backend._run_async(coro()) == "ok"
+        fake_credential.close.assert_awaited_once()
+
+    def test_run_async_swallows_credential_close_errors(self):
+        """An error closing the temporary credential is logged and swallowed."""
+        backend = _make_backend()
+        fake_credential = AsyncMock()
+        fake_credential.close.side_effect = RuntimeError("boom")
+
+        async def coro():
+            backend._credential = fake_credential
+            return "ok"
+
+        assert backend._run_async(coro()) == "ok"
+        fake_credential.close.assert_awaited_once()
+
+    def test_run_async_skips_user_supplied_credential(self):
+        """User-supplied credentials are caller-owned and never closed by _run_async."""
+        user_cred = AsyncMock()
+        config = AzureBlobConfig(
+            account_url="https://x.blob.core.windows.net",
+            container_name="test",
+            credential=user_cred,
+        )
+        backend = AzureBlobBackend(config)
+
+        async def coro():
+            backend._credential = user_cred
+            return "ok"
+
+        assert backend._run_async(coro()) == "ok"
+        user_cred.close.assert_not_awaited()
+
+    def test_run_async_restores_cache_after_call(self):
+        """The pre-existing cache is restored even when the coroutine swaps it."""
+        backend = _make_backend()
+        original_client = MagicMock()
+        original_container = MagicMock()
+        original_credential = MagicMock()
+        backend._client = original_client
+        backend._container = original_container
+        backend._credential = original_credential
+
+        async def coro():
+            # Simulate lazy init in the temporary loop.
+            backend._client = AsyncMock()
+            backend._credential = AsyncMock()
+            return "ok"
+
+        assert backend._run_async(coro()) == "ok"
+        assert backend._client is original_client
+        assert backend._container is original_container
+        assert backend._credential is original_credential
+
 
 # ------------------------------------------------------------------
 # aread tests
