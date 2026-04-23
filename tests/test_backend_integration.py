@@ -247,9 +247,7 @@ class TestSyncWrappersFromAsync:
 
     async def test_concurrent_sync_wrappers_after_async_init(self, backend):
         # Concurrent sync calls from multiple threads must not corrupt the
-        # save/swap/restore sequence in `_run_async`. Without serialisation,
-        # interleaving threads would either nuke the cached client or close
-        # one another's temporary clients.
+        # cached async client or close one another's temporary sync clients.
         await backend.awrite("/concurrent/a.txt", "alpha")
         await backend.awrite("/concurrent/b.txt", "bravo")
         await backend.awrite("/concurrent/c.txt", "charlie")
