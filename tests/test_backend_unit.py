@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -814,7 +815,7 @@ class TestRunAsync:
         assert backend._client is None
         assert backend._container is None
 
-    def test_run_async_swallows_client_close_errors(self):
+    def test_run_async_swallows_client_close_errors(self, caplog):
         """An error closing the temporary client is logged and swallowed."""
         backend = _make_backend()
         fake_client = MagicMock()
@@ -829,9 +830,11 @@ class TestRunAsync:
         # Must not raise even though close() blew up.
         with patch("deepagents_azure_blob_backend.backend.BlobServiceClient") as MockBSC:
             MockBSC.from_connection_string.return_value = fake_client
-            assert backend._run_async(coro) == "ok"
+            with caplog.at_level(logging.WARNING, logger="deepagents_azure_blob_backend.backend"):
+                assert backend._run_async(coro) == "ok"
 
         fake_client.close.assert_awaited_once()
+        assert "Error closing temporary client" in caplog.text
 
     def test_run_async_closes_temporary_credential(self):
         """A credential lazily created inside the temporary loop is closed."""
@@ -858,7 +861,7 @@ class TestRunAsync:
         fake_credential.close.assert_awaited_once()
         fake_client.close.assert_awaited_once()
 
-    def test_run_async_swallows_credential_close_errors(self):
+    def test_run_async_swallows_credential_close_errors(self, caplog):
         """An error closing the temporary credential is logged and swallowed."""
         config = AzureBlobConfig(
             account_url="https://x.blob.core.windows.net",
@@ -879,9 +882,11 @@ class TestRunAsync:
             patch("azure.identity.aio.DefaultAzureCredential", return_value=fake_credential),
             patch("deepagents_azure_blob_backend.backend.BlobServiceClient", return_value=fake_client),
         ):
-            assert backend._run_async(coro) == "ok"
+            with caplog.at_level(logging.WARNING, logger="deepagents_azure_blob_backend.backend"):
+                assert backend._run_async(coro) == "ok"
 
         fake_credential.close.assert_awaited_once()
+        assert "Error closing temporary credential" in caplog.text
 
     def test_run_async_skips_user_supplied_credential(self):
         """User-supplied credentials are caller-owned and never closed by _run_async."""
@@ -965,8 +970,9 @@ class TestRunAsync:
         fake_container = MagicMock()
 
         async def coro():
-            state = backend_module._temporary_client_state.get()
-            assert state is not None
+            states = backend_module._temporary_client_states.get()
+            assert states is not None
+            state = states.setdefault(id(backend), backend_module._ClientState())
             async with state.init_lock:
                 task = asyncio.create_task(backend._get_container())
                 await asyncio.sleep(0)
@@ -974,6 +980,32 @@ class TestRunAsync:
             return await task
 
         assert backend._run_async(coro) is fake_container
+
+    def test_run_async_uses_separate_temporary_state_per_backend(self):
+        """Backends used in the same sync wrapper do not share temporary clients."""
+        backend_one = _make_backend("one/")
+        backend_two = _make_backend("two/")
+        client_one = MagicMock()
+        client_one.close = AsyncMock()
+        container_one = MagicMock()
+        client_one.get_container_client.return_value = container_one
+        client_two = MagicMock()
+        client_two.close = AsyncMock()
+        container_two = MagicMock()
+        client_two.get_container_client.return_value = container_two
+
+        async def coro():
+            assert await backend_one._get_container() is container_one
+            assert await backend_two._get_container() is container_two
+            return "ok"
+
+        with patch("deepagents_azure_blob_backend.backend.BlobServiceClient") as MockBSC:
+            MockBSC.from_connection_string.side_effect = [client_one, client_two]
+            assert backend_one._run_async(coro) == "ok"
+
+        assert MockBSC.from_connection_string.call_count == 2
+        client_one.close.assert_awaited_once()
+        client_two.close.assert_awaited_once()
 
     def test_run_async_temporary_state_does_not_hide_instance_cache(self):
         """Overlapping async work sees the instance cache, not sync-call temporary state."""

@@ -44,10 +44,11 @@ class _ClientState:
     container: Optional[ContainerClient] = None
     credential: Optional[Any] = None
     init_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    user_credential: Optional[Any] = None
 
 
-_temporary_client_state: contextvars.ContextVar[_ClientState | None] = contextvars.ContextVar(
-    "deepagents_azure_blob_backend_temporary_client_state",
+_temporary_client_states: contextvars.ContextVar[dict[int, _ClientState] | None] = contextvars.ContextVar(
+    "deepagents_azure_blob_backend_temporary_client_states",
     default=None,
 )
 
@@ -84,12 +85,17 @@ class AzureBlobBackend(BackendProtocol):
 
     async def _get_container(self) -> ContainerClient:
         """Lazily initialise and return the container client."""
-        state = _temporary_client_state.get()
-        if state is None:
+        temporary_states = _temporary_client_states.get()
+        if temporary_states is None:
+            state = None
             if self._container is not None:
                 return self._container
             init_lock = self._init_lock
         else:
+            state = temporary_states.get(id(self))
+            if state is None:
+                state = _ClientState(user_credential=self._config.credential)
+                temporary_states[id(self)] = state
             if state.container is not None:
                 return state.container
             init_lock = state.init_lock
@@ -283,9 +289,9 @@ class AzureBlobBackend(BackendProtocol):
         """Run an async coroutine from sync context.
 
         Sync wrappers run the coroutine in a fresh event loop. Azure async
-        clients are loop-affine, so `_get_container` uses a context-local
+        clients are loop-affine, so `_get_container` uses context-local
         temporary client state while the coroutine runs instead of reusing or
-        mutating the instance-level async cache. The coroutine is constructed
+        mutating instance-level async caches. The coroutine is constructed
         after the context is installed so Python versions that bind coroutine
         context at creation still see the temporary state.
 
@@ -294,25 +300,26 @@ class AzureBlobBackend(BackendProtocol):
         """
 
         async def _run_and_cleanup() -> Any:
-            state = _ClientState()
-            token = _temporary_client_state.set(state)
+            states: dict[int, _ClientState] = {}
+            token = _temporary_client_states.set(states)
             try:
                 return await coro_factory()
             finally:
-                if state.client is not None:
-                    try:
-                        await state.client.close()
-                    except Exception:  # noqa: BLE001
-                        logger.debug("Error closing temporary client", exc_info=True)
-                # Only close credentials we created ourselves
-                # (e.g. DefaultAzureCredential). Skip user-supplied
-                # credentials so we don't tear down caller-owned state.
-                if state.credential is not None and state.credential is not self._config.credential:
-                    try:
-                        await state.credential.close()
-                    except Exception:  # noqa: BLE001
-                        logger.debug("Error closing temporary credential", exc_info=True)
-                _temporary_client_state.reset(token)
+                for state in states.values():
+                    if state.client is not None:
+                        try:
+                            await state.client.close()
+                        except Exception:  # noqa: BLE001
+                            logger.warning("Error closing temporary client", exc_info=True)
+                    # Only close credentials we created ourselves
+                    # (e.g. DefaultAzureCredential). Skip user-supplied
+                    # credentials so we don't tear down caller-owned state.
+                    if state.credential is not None and state.credential is not state.user_credential:
+                        try:
+                            await state.credential.close()
+                        except Exception:  # noqa: BLE001
+                            logger.warning("Error closing temporary credential", exc_info=True)
+                _temporary_client_states.reset(token)
 
         try:
             loop = asyncio.get_running_loop()
