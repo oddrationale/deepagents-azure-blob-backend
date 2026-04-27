@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.2.1...deepagents-azure-blob-backend-v0.2.2) (2026-04-27)
+
+
+### Features
+
+* support Deep Agents 0.5 ReadResult API ([4a4c011](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/4a4c01126a4f9bb2fe4d400c0696aad493766ef8))
+
 ## [0.2.1](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.2.0...deepagents-azure-blob-backend-v0.2.1) (2026-04-23)
 
 
