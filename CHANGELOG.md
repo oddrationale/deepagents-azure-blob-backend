@@ -1,6 +1,11 @@
 # Changelog
 
-## [0.2.2](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.2.1...deepagents-azure-blob-backend-v0.2.2) (2026-04-27)
+## [0.3.0](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.2.1...deepagents-azure-blob-backend-v0.3.0) (2026-04-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* `AzureBlobStore.read_file()` now returns Deep Agents `ReadResult` values instead of raw strings.
 
 
 ### Features
