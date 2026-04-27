@@ -277,5 +277,6 @@ class TestSyncWrappersFromAsync:
 
         # Cache must still be usable from the original loop afterwards.
         recovered = await backend.aread("/concurrent/a.txt")
+        assert recovered.error is None
         assert recovered.file_data is not None
         assert "alpha" in recovered.file_data["content"]
