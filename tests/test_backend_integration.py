@@ -39,7 +39,10 @@ class TestWrite:
 class TestRead:
     async def test_read_returns_numbered_lines(self, backend):
         await backend.awrite("/test.txt", "line one\nline two\nline three")
-        content = await backend.aread("/test.txt")
+        result = await backend.aread("/test.txt")
+        assert result.error is None
+        assert result.file_data is not None
+        content = result.file_data["content"]
         assert "1\tline one" in content
         assert "2\tline two" in content
         assert "3\tline three" in content
@@ -47,7 +50,10 @@ class TestRead:
     async def test_read_with_offset_and_limit(self, backend):
         lines = "\n".join(f"line {i}" for i in range(1, 11))
         await backend.awrite("/lines.txt", lines)
-        content = await backend.aread("/lines.txt", offset=2, limit=3)
+        result = await backend.aread("/lines.txt", offset=2, limit=3)
+        assert result.error is None
+        assert result.file_data is not None
+        content = result.file_data["content"]
         assert "3\tline 3" in content
         assert "4\tline 4" in content
         assert "5\tline 5" in content
@@ -55,12 +61,15 @@ class TestRead:
 
     async def test_read_nonexistent_file(self, backend):
         result = await backend.aread("/nope.txt")
-        assert "not found" in result.lower()
+        assert result.error is not None
+        assert "not found" in result.error.lower()
 
     async def test_read_empty_file(self, backend):
         await backend.awrite("/empty.txt", "")
         result = await backend.aread("/empty.txt")
-        assert "empty" in result.lower()
+        assert result.error is None
+        assert result.file_data is not None
+        assert "empty" in result.file_data["content"].lower()
 
 
 class TestEdit:
@@ -73,7 +82,8 @@ class TestEdit:
         assert result.files_update is None
 
         content = await backend.aread("/edit.txt")
-        assert "Universe" in content
+        assert content.file_data is not None
+        assert "Universe" in content.file_data["content"]
 
     async def test_edit_nonexistent_file(self, backend):
         result = await backend.aedit("/nope.txt", "old", "new")
@@ -99,8 +109,9 @@ class TestEdit:
         assert result.occurrences == 2
 
         content = await backend.aread("/multi2.txt")
-        assert "ccc" in content
-        assert "aaa" not in content
+        assert content.file_data is not None
+        assert "ccc" in content.file_data["content"]
+        assert "aaa" not in content.file_data["content"]
 
 
 class TestLsInfo:
@@ -217,8 +228,9 @@ class TestSyncWrappersFromAsync:
         # `_run_async` reused the cached client across event loops.
         # `read` returns "Error: ..." strings on failure, so check content.
         read_content = await asyncio.to_thread(backend.read, "/sync/hello.txt")
-        assert not read_content.startswith("Error:")
-        assert "hello world TODO" in read_content
+        assert read_content.error is None
+        assert read_content.file_data is not None
+        assert "hello world TODO" in read_content.file_data["content"]
 
         assert (await asyncio.to_thread(backend.write, "/sync/two.txt", "data")).error is None
         assert (await asyncio.to_thread(backend.edit, "/sync/hello.txt", "TODO", "DONE")).error is None
@@ -242,8 +254,9 @@ class TestSyncWrappersFromAsync:
 
         # Async path still works after the sync calls — cache survives.
         recovered = await backend.aread("/sync/hello.txt")
-        assert not recovered.startswith("Error:")
-        assert "hello world DONE" in recovered
+        assert recovered.error is None
+        assert recovered.file_data is not None
+        assert "hello world DONE" in recovered.file_data["content"]
 
     async def test_concurrent_sync_wrappers_after_async_init(self, backend):
         # Concurrent sync calls from multiple threads must not corrupt the
@@ -258,9 +271,12 @@ class TestSyncWrappersFromAsync:
             asyncio.to_thread(backend.read, "/concurrent/c.txt"),
         )
         for content, expected in zip(results, ("alpha", "bravo", "charlie"), strict=True):
-            assert not content.startswith("Error:")
-            assert expected in content
+            assert content.error is None
+            assert content.file_data is not None
+            assert expected in content.file_data["content"]
 
         # Cache must still be usable from the original loop afterwards.
         recovered = await backend.aread("/concurrent/a.txt")
-        assert "alpha" in recovered
+        assert recovered.error is None
+        assert recovered.file_data is not None
+        assert "alpha" in recovered.file_data["content"]
