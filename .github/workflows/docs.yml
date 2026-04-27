@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install uv
-        uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v4
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v4
       - name: Install dependencies
         run: uv sync --group dev
       - name: Generate API docs
