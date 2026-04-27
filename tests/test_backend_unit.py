@@ -1078,9 +1078,11 @@ class TestARead:
         container.get_blob_client.return_value = mock_blob
 
         result = await backend.aread("/file.txt")
-        assert "line1" in result
-        assert "line2" in result
-        assert "line3" in result
+        assert result.error is None
+        assert result.file_data is not None
+        assert "line1" in result.file_data["content"]
+        assert "line2" in result.file_data["content"]
+        assert "line3" in result.file_data["content"]
 
     async def test_read_not_found(self):
         backend, container = await _setup_backend_with_container()
@@ -1089,8 +1091,9 @@ class TestARead:
         container.get_blob_client.return_value = mock_blob
 
         result = await backend.aread("/missing.txt")
-        assert "Error" in result
-        assert "not found" in result.lower()
+        assert result.error is not None
+        assert "Error" in result.error
+        assert "not found" in result.error.lower()
 
     async def test_read_empty_file(self):
         backend, container = await _setup_backend_with_container()
@@ -1104,7 +1107,9 @@ class TestARead:
         container.get_blob_client.return_value = mock_blob
 
         result = await backend.aread("/empty.txt")
-        assert "empty" in result.lower()
+        assert result.error is None
+        assert result.file_data is not None
+        assert "empty" in result.file_data["content"].lower()
 
     async def test_read_with_offset_and_limit(self):
         backend, container = await _setup_backend_with_container()
@@ -1118,9 +1123,11 @@ class TestARead:
         container.get_blob_client.return_value = mock_blob
 
         result = await backend.aread("/file.txt", offset=1, limit=2)
-        assert "line2" in result
-        assert "line3" in result
-        assert "line1" not in result
+        assert result.error is None
+        assert result.file_data is not None
+        assert "line2" in result.file_data["content"]
+        assert "line3" in result.file_data["content"]
+        assert "line1" not in result.file_data["content"]
 
     async def test_read_offset_out_of_range(self):
         backend, container = await _setup_backend_with_container()
@@ -1134,14 +1141,16 @@ class TestARead:
         container.get_blob_client.return_value = mock_blob
 
         result = await backend.aread("/file.txt", offset=100)
-        assert "Error" in result
-        assert "offset" in result.lower()
+        assert result.error is not None
+        assert "Error" in result.error
+        assert "offset" in result.error.lower()
 
     async def test_read_invalid_path(self):
         backend, _ = await _setup_backend_with_container()
 
         result = await backend.aread("/src/../bad.txt")
-        assert "invalid path" in result.lower()
+        assert result.error is not None
+        assert "invalid path" in result.error.lower()
 
 
 # ------------------------------------------------------------------

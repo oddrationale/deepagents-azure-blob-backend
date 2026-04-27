@@ -19,10 +19,12 @@ from azure.storage.blob.aio import BlobServiceClient, ContainerClient
 from deepagents.backends.protocol import (
     BackendProtocol,
     EditResult,
+    FileData,
     FileDownloadResponse,
     FileInfo,
     FileUploadResponse,
     GrepMatch,
+    ReadResult,
     WriteResult,
 )
 from deepagents.backends.utils import (
@@ -420,11 +422,11 @@ class AzureBlobBackend(BackendProtocol):
     # read
     # ------------------------------------------------------------------
 
-    def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
+    def read(self, file_path: str, offset: int = 0, limit: int = 2000) -> ReadResult:
         """Read a file and return its content with line numbers (sync wrapper for `aread`)."""
         return self._run_async(lambda: self.aread(file_path, offset, limit))
 
-    async def aread(self, file_path: str, offset: int = 0, limit: int = 2000) -> str:
+    async def aread(self, file_path: str, offset: int = 0, limit: int = 2000) -> ReadResult:
         """Read a file and return its content with line numbers.
 
         Args:
@@ -433,13 +435,13 @@ class AzureBlobBackend(BackendProtocol):
             limit: Maximum number of lines to return.
 
         Returns:
-            File content formatted with line numbers, or an error string if
+            `ReadResult` with formatted file content on success, or an error if
             the file is not found or the offset is out of range.
         """
         try:
             file_path = self._validate_file_path(file_path)
         except ValueError as exc:
-            return f"Error: Invalid path '{file_path}': {exc}"
+            return ReadResult(error=f"Error: Invalid path '{file_path}': {exc}")
 
         container = await self._get_container()
         blob_key = self._blob_key(file_path)
@@ -447,10 +449,12 @@ class AzureBlobBackend(BackendProtocol):
         try:
             content, _metadata = await self._read_blob(container, blob_key)
         except ResourceNotFoundError:
-            return f"Error: File '{file_path}' not found"
+            return ReadResult(error=f"Error: File '{file_path}' not found")
 
         if not content or content.strip() == "":
-            return "System reminder: File exists but has empty contents"
+            return ReadResult(
+                file_data=FileData(content="System reminder: File exists but has empty contents", encoding="utf-8")
+            )
 
         lines = content.split("\n")
         # Remove trailing empty line from split (matches upstream behavior)
@@ -458,10 +462,11 @@ class AzureBlobBackend(BackendProtocol):
             lines = lines[:-1]
 
         if offset >= len(lines):
-            return f"Error: Line offset {offset} exceeds file length ({len(lines)} lines)"
+            return ReadResult(error=f"Error: Line offset {offset} exceeds file length ({len(lines)} lines)")
 
         selected = lines[offset : offset + limit]
-        return format_content_with_line_numbers(selected, start_line=offset + 1)
+        formatted = format_content_with_line_numbers(selected, start_line=offset + 1)
+        return ReadResult(file_data=FileData(content=formatted, encoding="utf-8"))
 
     # ------------------------------------------------------------------
     # write
