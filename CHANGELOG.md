@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.3.0...deepagents-azure-blob-backend-v0.4.0) (2026-06-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* require deepagents>=0.6.1.
+
+### Features
+
+* mark backend protocol update as breaking ([#61](https://github.com/oddrationale/deepagents-azure-blob-backend/issues/61)) ([354dce8](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/354dce8f2c309fb000de5c77e4d9e074c426498e))
+* support current Deep Agents backend protocol ([#59](https://github.com/oddrationale/deepagents-azure-blob-backend/issues/59)) ([5e7ae38](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/5e7ae3869cbb720aba3757c588f23c18866f73e9))
+
 ## [0.3.0](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.2.1...deepagents-azure-blob-backend-v0.3.0) (2026-04-27)
 
 
