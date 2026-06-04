@@ -12,7 +12,7 @@
 
 <!-- How did you verify this works? -->
 
-- [ ] Unit tests pass (`uv run pytest tests/test_backend_unit.py -v`)
-- [ ] Integration tests pass (`uv run pytest tests/test_backend_integration.py -v`)
+- [ ] Unit tests pass (`uv run pytest tests/unit_tests -v`)
+- [ ] Integration tests pass (`uv run pytest tests/integration_tests -v`)
 - [ ] Lint passes (`uv run ruff check .`)
 - [ ] Type check passes (`uv run ty check`)
