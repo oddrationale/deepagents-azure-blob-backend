@@ -23,6 +23,8 @@ Or with [uv](https://docs.astral.sh/uv/):
 uv add deepagents-azure-blob-backend
 ```
 
+This package requires `deepagents>=0.6.1`, where `BackendProtocol` exposes structured `ls`, `glob`, and `grep` result types.
+
 ## Quick Start
 
 ```python
@@ -111,12 +113,12 @@ All methods from `BackendProtocol`:
 
 | Method | Async | Description |
 |--------|-------|-------------|
-| `ls_info(path)` | `als_info` | List directory with synthesized subdirectories |
+| `ls(path)` | `als` | List directory with synthesized subdirectories |
 | `read(path, offset, limit)` | `aread` | Read file with line numbers |
 | `write(path, content)` | `awrite` | Create new file (errors if exists) |
 | `edit(path, old, new)` | `aedit` | String replacement editing |
-| `glob_info(pattern, path)` | `aglob_info` | Glob pattern file matching |
-| `grep_raw(pattern, path, glob)` | `agrep_raw` | Literal text search across files |
+| `glob(pattern, path)` | `aglob` | Glob pattern file matching |
+| `grep(pattern, path, glob)` | `agrep` | Literal text search across files |
 | `upload_files(files)` | `aupload_files` | Batch binary upload |
 | `download_files(paths)` | `adownload_files` | Batch binary download |
 
