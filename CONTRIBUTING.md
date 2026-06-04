@@ -18,7 +18,7 @@ uv sync --group dev
 ### Unit tests (no external dependencies)
 
 ```bash
-uv run pytest tests/test_backend_unit.py -v
+uv run pytest tests/unit_tests -v
 ```
 
 ### Integration tests (requires Azurite)
@@ -37,7 +37,7 @@ azurite-blob --blobPort 10000 --skipApiVersionCheck
 Run integration tests:
 
 ```bash
-uv run pytest tests/test_backend_integration.py -v
+uv run pytest tests/integration_tests -v
 ```
 
 ## Code Quality

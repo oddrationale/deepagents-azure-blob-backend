@@ -127,11 +127,11 @@ All methods from `BackendProtocol`:
 uv sync --group dev
 
 # Run unit tests
-uv run pytest tests/test_backend_unit.py -v
+uv run pytest tests/unit_tests -v
 
 # Run integration tests (requires Azurite)
 docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --skipApiVersionCheck --blobHost 0.0.0.0
-uv run pytest tests/test_backend_integration.py -v
+uv run pytest tests/integration_tests -v
 
 # Lint and format
 uv run ruff check .

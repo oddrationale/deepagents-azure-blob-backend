@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from deepagents.backends.protocol import GlobResult, GrepResult, LsResult
 
 from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
 from deepagents_azure_blob_backend._path import (
@@ -1784,23 +1785,23 @@ class TestSyncWrappers:
         result = backend.edit("/f.txt", "a", "b")
         assert result["path"] == "/f.txt"
 
-    def test_ls_info_sync(self):
+    def test_ls_sync(self):
         backend = _make_backend()
-        backend.als_info = AsyncMock(return_value=[])
-        result = backend.ls_info("/")
-        assert result == []
+        backend.als = AsyncMock(return_value=LsResult(entries=[]))
+        result = backend.ls("/")
+        assert result == LsResult(entries=[])
 
-    def test_glob_info_sync(self):
+    def test_glob_sync(self):
         backend = _make_backend()
-        backend.aglob_info = AsyncMock(return_value=[])
-        result = backend.glob_info("*.py")
-        assert result == []
+        backend.aglob = AsyncMock(return_value=GlobResult(matches=[]))
+        result = backend.glob("*.py")
+        assert result == GlobResult(matches=[])
 
-    def test_grep_raw_sync(self):
+    def test_grep_sync(self):
         backend = _make_backend()
-        backend.agrep_raw = AsyncMock(return_value=[])
-        result = backend.grep_raw("pattern")
-        assert result == []
+        backend.agrep = AsyncMock(return_value=GrepResult(matches=[]))
+        result = backend.grep("pattern")
+        assert result == GrepResult(matches=[])
 
     def test_upload_files_sync(self):
         backend = _make_backend()

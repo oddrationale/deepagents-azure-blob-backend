@@ -19,11 +19,13 @@ from azure.storage.blob.aio import BlobServiceClient, ContainerClient
 from deepagents.backends.protocol import (
     BackendProtocol,
     EditResult,
-    FileData,
     FileDownloadResponse,
     FileInfo,
     FileUploadResponse,
+    GlobResult,
     GrepMatch,
+    GrepResult,
+    LsResult,
     ReadResult,
     WriteResult,
 )
@@ -344,14 +346,14 @@ class AzureBlobBackend(BackendProtocol):
         return asyncio.run(_run_and_cleanup())
 
     # ------------------------------------------------------------------
-    # ls_info
+    # ls
     # ------------------------------------------------------------------
 
-    def ls_info(self, path: str) -> list[FileInfo]:
-        """List files and subdirectories at *path* (sync wrapper for `als_info`)."""
-        return self._run_async(lambda: self.als_info(path))
+    def ls(self, path: str) -> LsResult:
+        """List files and subdirectories at *path*."""
+        return self._run_async(lambda: self.als(path))
 
-    async def als_info(self, path: str) -> list[FileInfo]:
+    async def als(self, path: str) -> LsResult:
         """List files and subdirectories at *path*.
 
         Directories are synthesized from blob key prefixes — no marker blobs
@@ -366,7 +368,7 @@ class AzureBlobBackend(BackendProtocol):
         try:
             normalized_root = self._validate_search_path(path)
         except ValueError:
-            return []
+            return LsResult(entries=[])
 
         container = await self._get_container()
         blobs = await self._list_blobs(
@@ -374,7 +376,7 @@ class AzureBlobBackend(BackendProtocol):
             get_prefix_for_path(self._config.prefix, normalized_root),
         )
         if not blobs:
-            return []
+            return LsResult(entries=[])
 
         infos: list[FileInfo] = []
         subdirs: set[str] = set()
@@ -416,7 +418,7 @@ class AzureBlobBackend(BackendProtocol):
             infos.append(build_file_info(path=subdir, is_dir=True, size=0))
 
         infos.sort(key=lambda x: x.get("path", ""))
-        return infos
+        return LsResult(entries=infos)
 
     # ------------------------------------------------------------------
     # read
@@ -453,7 +455,7 @@ class AzureBlobBackend(BackendProtocol):
 
         if not content or content.strip() == "":
             return ReadResult(
-                file_data=FileData(content="System reminder: File exists but has empty contents", encoding="utf-8")
+                file_data={"content": "System reminder: File exists but has empty contents", "encoding": "utf-8"}
             )
 
         lines = content.split("\n")
@@ -466,7 +468,7 @@ class AzureBlobBackend(BackendProtocol):
 
         selected = lines[offset : offset + limit]
         formatted = format_content_with_line_numbers(selected, start_line=offset + 1)
-        return ReadResult(file_data=FileData(content=formatted, encoding="utf-8"))
+        return ReadResult(file_data={"content": formatted, "encoding": "utf-8"})
 
     # ------------------------------------------------------------------
     # write
@@ -504,7 +506,7 @@ class AzureBlobBackend(BackendProtocol):
                 error=f"Cannot write to {file_path} because it already exists. "
                 f"Read and then make an edit, or write to a new path."
             )
-        return WriteResult(path=file_path, files_update=None)
+        return WriteResult(path=file_path)
 
     # ------------------------------------------------------------------
     # edit
@@ -560,17 +562,17 @@ class AzureBlobBackend(BackendProtocol):
         new_content, occurrences = result
         created_at = metadata.get("created_at")
         await self._write_blob(container, blob_key, new_content, created_at=created_at)
-        return EditResult(path=file_path, files_update=None, occurrences=int(occurrences))
+        return EditResult(path=file_path, occurrences=int(occurrences))
 
     # ------------------------------------------------------------------
-    # glob_info
+    # glob
     # ------------------------------------------------------------------
 
-    def glob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
-        """Find files matching a glob pattern (sync wrapper for `aglob_info`)."""
-        return self._run_async(lambda: self.aglob_info(pattern, path))
+    def glob(self, pattern: str, path: str | None = None) -> GlobResult:
+        """Find files matching a glob pattern."""
+        return self._run_async(lambda: self.aglob(pattern, path))
 
-    async def aglob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
+    async def aglob(self, pattern: str, path: str | None = None) -> GlobResult:
         """Find files matching a glob pattern.
 
         Supports ``**`` (globstar) and ``{a,b}`` brace expansion via
@@ -581,17 +583,18 @@ class AzureBlobBackend(BackendProtocol):
             path: Base directory for the search.
 
         Returns:
-            List of `FileInfo` dicts for matching files.
+            A ``GlobResult`` whose ``matches`` field contains the matching
+            ``FileInfo`` dicts.
         """
         try:
-            normalized_path = self._validate_search_path(path)
+            normalized_path = self._validate_search_path(path or "/")
         except ValueError:
-            return []
+            return GlobResult(matches=[])
 
         container = await self._get_container()
         blobs = await self._list_target_blobs(container, normalized_path)
         if not blobs:
-            return []
+            return GlobResult(matches=[])
 
         infos: list[FileInfo] = []
         for blob in blobs:
@@ -614,27 +617,27 @@ class AzureBlobBackend(BackendProtocol):
                     )
                 )
 
-        return infos
+        return GlobResult(matches=infos)
 
     # ------------------------------------------------------------------
-    # grep_raw
+    # grep
     # ------------------------------------------------------------------
 
-    def grep_raw(
+    def grep(
         self,
         pattern: str,
         path: str | None = None,
         glob: str | None = None,
-    ) -> list[GrepMatch] | str:
-        """Search file contents for a literal substring (sync wrapper for `agrep_raw`)."""
-        return self._run_async(lambda: self.agrep_raw(pattern, path, glob))
+    ) -> GrepResult:
+        """Search file contents for a literal substring."""
+        return self._run_async(lambda: self.agrep(pattern, path, glob))
 
-    async def agrep_raw(
+    async def agrep(
         self,
         pattern: str,
         path: str | None = None,
         glob: str | None = None,
-    ) -> list[GrepMatch] | str:
+    ) -> GrepResult:
         """Search file contents for a literal substring.
 
         Blobs are downloaded and scanned concurrently (bounded by
@@ -648,22 +651,20 @@ class AzureBlobBackend(BackendProtocol):
                 from the search root).
 
         Returns:
-            On success, a list of `GrepMatch` dicts with ``path``, ``line``,
-            and ``text`` keys, or an empty list if nothing matches.
-
-            Returns an error string when the search path is invalid or when
-            one or more blobs cannot be read reliably.
+            A ``GrepResult`` whose ``matches`` field contains any matching
+            ``GrepMatch`` dicts and whose ``error`` field is set when the
+            search path is invalid or a blob cannot be read reliably.
         """
         try:
             search_path = self._validate_search_path(path)
         except ValueError as exc:
             invalid_path = path if path is not None else "/"
-            return f"Error: Invalid path '{invalid_path}': {exc}"
+            return GrepResult(error=f"Error: Invalid path '{invalid_path}': {exc}")
 
         container = await self._get_container()
         blobs = await self._list_target_blobs(container, search_path)
         if not blobs:
-            return []
+            return GrepResult(matches=[])
 
         blob_candidates: list[tuple[Any, str]] = []
         for blob in blobs:
@@ -720,9 +721,9 @@ class AzureBlobBackend(BackendProtocol):
             sample = ", ".join(failed_blobs[:3])
             remainder = len(failed_blobs) - min(len(failed_blobs), 3)
             suffix = f", and {remainder} more" if remainder else ""
-            return f"Error: grep could not read {len(failed_blobs)} file(s): {sample}{suffix}"
+            return GrepResult(error=f"Error: grep could not read {len(failed_blobs)} file(s): {sample}{suffix}")
 
-        return matches
+        return GrepResult(matches=matches)
 
     # ------------------------------------------------------------------
     # upload_files / download_files
