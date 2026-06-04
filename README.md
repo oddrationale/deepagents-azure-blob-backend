@@ -3,6 +3,7 @@
 [![CI](https://github.com/oddrationale/deepagents-azure-blob-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/oddrationale/deepagents-azure-blob-backend/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/oddrationale/deepagents-azure-blob-backend/graph/badge.svg)](https://codecov.io/gh/oddrationale/deepagents-azure-blob-backend)
 [![PyPI Version](https://img.shields.io/pypi/v/deepagents-azure-blob-backend.svg)](https://pypi.python.org/pypi/deepagents-azure-blob-backend)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/deepagents-azure-blob-backend.svg)](https://pypistats.org/packages/deepagents-azure-blob-backend)
 [![Supported Python Versions](https://img.shields.io/pypi/pyversions/deepagents-azure-blob-backend.svg)](https://pypi.python.org/pypi/deepagents-azure-blob-backend)
 [![API Docs](https://img.shields.io/badge/docs-API%20reference-brightgreen)](https://oddrationale.github.io/deepagents-azure-blob-backend)
 [![autofix.ci](https://img.shields.io/badge/autofix.ci-enabled-success)](https://github.com/oddrationale/deepagents-azure-blob-backend/actions/workflows/autofix.ci.yml)
