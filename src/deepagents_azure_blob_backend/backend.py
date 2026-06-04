@@ -583,7 +583,8 @@ class AzureBlobBackend(BackendProtocol):
             path: Base directory for the search.
 
         Returns:
-            List of `FileInfo` dicts for matching files.
+            A ``GlobResult`` whose ``matches`` field contains the matching
+            ``FileInfo`` dicts.
         """
         try:
             normalized_path = self._validate_search_path(path or "/")
@@ -650,11 +651,9 @@ class AzureBlobBackend(BackendProtocol):
                 from the search root).
 
         Returns:
-            On success, a list of `GrepMatch` dicts with ``path``, ``line``,
-            and ``text`` keys, or an empty list if nothing matches.
-
-            Returns an error string when the search path is invalid or when
-            one or more blobs cannot be read reliably.
+            A ``GrepResult`` whose ``matches`` field contains any matching
+            ``GrepMatch`` dicts and whose ``error`` field is set when the
+            search path is invalid or a blob cannot be read reliably.
         """
         try:
             search_path = self._validate_search_path(path)
