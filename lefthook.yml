@@ -1,0 +1,13 @@
+pre-commit:
+  parallel: true
+  commands:
+    ruff-check:
+      glob: "**/*.py"
+      run: uv run ruff check {staged_files}
+    ruff-format:
+      glob: "**/*.py"
+      run: uv run ruff format --check {staged_files}
+    ty:
+      run: uv run ty check
+    unit-tests:
+      run: uv run pytest tests/unit_tests -v
