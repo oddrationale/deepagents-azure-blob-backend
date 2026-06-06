@@ -42,6 +42,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "lefthook>=2.1.9",
     "pdoc",
     "pygments>=2.20.0",
     "pytest>=9.0.3",

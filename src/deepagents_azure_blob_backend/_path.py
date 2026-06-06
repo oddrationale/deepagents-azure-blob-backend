@@ -21,7 +21,9 @@ def normalize_path(path: str) -> str:
         return ""
 
     normalized = validate_path(path)
-    return "" if normalized == "/" else normalized.lstrip("/")
+    if normalized == "/":
+        return ""
+    return "/".join(part for part in normalized.split("/") if part)
 
 
 def to_blob_key(prefix: str, path: str) -> str:
