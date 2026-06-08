@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.4.0...deepagents-azure-blob-backend-v0.4.1) (2026-06-08)
+
+
+### Documentation
+
+* add PyPI downloads badge ([#62](https://github.com/oddrationale/deepagents-azure-blob-backend/issues/62)) ([1cbb5e6](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/1cbb5e650de3e6ec2b0443dffe916d3d2ebb13b9))
+
 ## [0.4.0](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.3.0...deepagents-azure-blob-backend-v0.4.0) (2026-06-04)
 
 
