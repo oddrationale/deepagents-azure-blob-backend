@@ -1,13 +1,13 @@
 [project]
 name = "deepagents-azure-blob-backend"
 version = "0.4.1"
-description = "Azure Blob Storage filesystem backend for LangChain Deep Agents"
+description = "Deprecated — use langchain-azure-storage[deepagents]. Azure Blob Storage filesystem backend for LangChain Deep Agents"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 keywords = ["langchain", "deepagents", "azure", "blob-storage", "agent", "backend", "llm"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 7 - Inactive",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -17,7 +17,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "deepagents>=0.6.1",
+    # Do not raise this ceiling. deepagents 0.7.0 changed `BackendProtocol` in ways this
+    # backend does not implement (write overwrites instead of erroring, `delete`/`adelete`
+    # is required, `GrepResult.truncated`). This package is deprecated and will not be
+    # updated for it — use langchain-azure-storage[deepagents] on deepagents >= 0.7.1.
+    "deepagents>=0.6.1,<0.7.0",
     "azure-storage-blob[aio]>=12.0.0",
     "azure-identity>=1.0.0",
     "wcmatch",
@@ -31,6 +35,7 @@ dependencies = [
 ]
 
 [project.urls]
+"Successor package" = "https://pypi.org/project/langchain-azure-storage/"
 Homepage = "https://github.com/oddrationale/deepagents-azure-blob-backend"
 Documentation = "https://oddrationale.github.io/deepagents-azure-blob-backend"
 Repository = "https://github.com/oddrationale/deepagents-azure-blob-backend"
