@@ -92,6 +92,7 @@ import asyncio
 from deepagents import create_deep_agent
 from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
 
+
 async def main():
     config = AzureBlobConfig(
         account_url="https://<your-account>.blob.core.windows.net",
@@ -108,6 +109,7 @@ async def main():
     print(result["messages"][-1].content)
     await backend.close()
 
+
 asyncio.run(main())
 ```
 
@@ -119,8 +121,8 @@ from deepagents_azure_blob_backend import AzureBlobConfig
 config = AzureBlobConfig(
     account_url="https://<account>.blob.core.windows.net",
     container_name="my-container",
-    prefix="agent-workspace/",     # Namespace isolation for multi-agent setups
-    max_concurrency=8,             # Parallel blob ops for grep/glob
+    prefix="agent-workspace/",  # Namespace isolation for multi-agent setups
+    max_concurrency=8,  # Parallel blob ops for grep/glob
     encoding="utf-8",
 )
 ```
@@ -152,6 +154,7 @@ config = AzureBlobConfig(
 
 # 4. Credential object (any Azure credential)
 from azure.identity.aio import ClientSecretCredential
+
 config = AzureBlobConfig(
     account_url="https://<account>.blob.core.windows.net",
     container_name="my-container",
