@@ -1,0 +1,34 @@
+README.md
+  s_f3c41fa6ab4fb8::t_3fdffb9b602545 86
+  s_f3c41fa6ab4fb8::t_225cb947b9b3ae 11-23,28-72
+  s_f3c41fa6ab4fb8::t_7bde201374abbb 73
+pyproject.toml
+  s_f3c41fa6ab4fb8::t_8663672cb4a982 10
+  s_f3c41fa6ab4fb8::t_a823b9f76c3a45 4
+  s_f3c41fa6ab4fb8::t_03ac4a1fff8969 38
+  s_f3c41fa6ab4fb8::t_0853e6171406fd 20-24
+src/deepagents_azure_blob_backend/__init__.py
+  s_f3c41fa6ab4fb8::t_e09730144de44f 3-14
+  s_f3c41fa6ab4fb8::t_df3a5c02d85f46 46-47,51-60
+  s_f3c41fa6ab4fb8::t_36cd9efe77ebd7 61
+tests/unit_tests/test_deprecation.py
+  s_f3c41fa6ab4fb8::t_e2333b92431a4f 1-21
+uv.lock
+  s_f3c41fa6ab4fb8::t_083bb8e19fb2e4 631
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "a8b5bfe68908d9744b67fee7069dd566b1edd59e",
+  "prompts": {},
+  "sessions": {
+    "s_f3c41fa6ab4fb8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9222b018-c3e6-4346-bc8c-c71f00c54ff5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Dariel Dato-on <293921406+darieldatoon@users.noreply.github.com>"
+    }
+  }
+}
