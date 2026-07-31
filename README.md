@@ -8,9 +8,68 @@
 [![API Docs](https://img.shields.io/badge/docs-API%20reference-brightgreen)](https://oddrationale.github.io/deepagents-azure-blob-backend)
 [![autofix.ci](https://img.shields.io/badge/autofix.ci-enabled-success)](https://github.com/oddrationale/deepagents-azure-blob-backend/actions/workflows/autofix.ci.yml)
 
+> [!WARNING]
+> **This package is deprecated and no longer maintained.**
+>
+> Its Azure Blob Storage backend now ships first-party in [`langchain-azure-storage`](https://pypi.org/project/langchain-azure-storage/), maintained by LangChain and Microsoft in [langchain-ai/langchain-azure](https://github.com/langchain-ai/langchain-azure):
+>
+> ```bash
+> pip install "langchain-azure-storage[deepagents]"
+> ```
+>
+> The constructor API changed during upstream review, so this is not a drop-in swap — see [Migrating to langchain-azure-storage](#migrating-to-langchain-azure-storage) below.
+>
+> Existing releases stay installable and nothing is yanked, but `0.5.0` is the last one. It supports only `deepagents<0.7.0`; for `deepagents>=0.7.1`, use `langchain-azure-storage`.
+
 Azure Blob Storage filesystem backend for [LangChain Deep Agents](https://github.com/langchain-ai/deepagents).
 
 Deep Agents exposes a `BackendProtocol` — a pluggable interface for file operations (`read`, `write`, `edit`, `ls`, `glob`, `grep`) that the agent uses as its virtual filesystem. This package provides an Azure Blob Storage implementation of that interface.
+
+## Migrating to langchain-azure-storage
+
+```bash
+pip uninstall deepagents-azure-blob-backend
+pip install "langchain-azure-storage[deepagents]"
+```
+
+The successor drops the `AzureBlobConfig` dataclass and takes its arguments directly on the constructor. Credentials are Azure SDK credential objects rather than raw key or token strings:
+
+```python
+# Before
+from deepagents_azure_blob_backend import AzureBlobBackend, AzureBlobConfig
+
+backend = AzureBlobBackend(
+    AzureBlobConfig(
+        account_url="https://<account>.blob.core.windows.net",
+        container_name="agent-workspace",
+        prefix="session-001/",
+    )
+)
+
+# After
+from langchain_azure_storage.deepagents import AzureBlobBackend
+
+backend = AzureBlobBackend(
+    "https://<account>.blob.core.windows.net",
+    "agent-workspace",
+    prefix="session-001/",
+)
+```
+
+| `AzureBlobConfig` field | Replacement |
+|---|---|
+| `account_url`, `container_name` | Positional arguments to `AzureBlobBackend(...)` |
+| `prefix` | Keyword argument `prefix=` |
+| `credential=<azure credential>` | Keyword argument `credential=` (`TokenCredential`, `AsyncTokenCredential`, or `AzureSasCredential`) |
+| `connection_string="..."` | `AzureBlobBackend.from_connection_string(connection_string, container_name, prefix=...)` |
+| `sas_token="sv=..."` | `credential=AzureSasCredential("sv=...")` (from `azure.core.credentials`) |
+| `account_key="..."` | No direct equivalent — use `from_connection_string` (a connection string carries `AccountKey`) or a SAS credential |
+| *(omit all credentials)* | Unchanged — `DefaultAzureCredential` is still the default |
+| `max_concurrency`, `encoding`, `api_version` | Not exposed; the successor manages concurrency and encoding internally |
+
+The successor also requires `deepagents>=0.7.1`, where `write` overwrites an existing file instead of erroring and `delete`/`adelete` are part of `BackendProtocol`. Python 3.11+ is required for the `deepagents` extra.
+
+Further reading: [backend integrations](https://docs.langchain.com/oss/python/integrations/backends) · [design proposal and behavior notes](https://github.com/langchain-ai/langchain-azure/blob/main/libs/azure-storage/proposals/deepagents_backend.md) · [upstream PR](https://github.com/langchain-ai/langchain-azure/pull/783)
 
 ## Installation
 
@@ -24,7 +83,7 @@ Or with [uv](https://docs.astral.sh/uv/):
 uv add deepagents-azure-blob-backend
 ```
 
-This package requires `deepagents>=0.6.1`, where `BackendProtocol` exposes structured `ls`, `glob`, and `grep` result types.
+This package requires `deepagents>=0.6.1,<0.7.0`, where `BackendProtocol` exposes structured `ls`, `glob`, and `grep` result types. It does not support the `BackendProtocol` changes in `deepagents` 0.7.0 — see [Migrating to langchain-azure-storage](#migrating-to-langchain-azure-storage).
 
 ## Quick Start
 
