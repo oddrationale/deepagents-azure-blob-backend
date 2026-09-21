@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v4
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v4
       - name: Install dependencies
         run: uv sync --group dev
       - name: Generate API docs
@@ -39,4 +39,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
