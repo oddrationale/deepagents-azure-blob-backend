@@ -1,5 +1,8 @@
 # Examples
 
+> [!WARNING]
+> `deepagents-azure-blob-backend` is deprecated. For new projects use [`langchain-azure-storage[deepagents]`](https://pypi.org/project/langchain-azure-storage/) — see the [migration guide](../README.md#migrating-to-langchain-azure-storage).
+
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) installed
