@@ -2,6 +2,8 @@
 
 ## Project Overview
 
+**Deprecated:** This package is no longer maintained. Its backend now ships as `langchain_azure_storage.deepagents.AzureBlobBackend` in `langchain-azure-storage[deepagents]`. The last release (0.5.0) supports only `deepagents<0.7.0`; do not raise that ceiling.
+
 Azure Blob Storage filesystem backend for [LangChain Deep Agents](https://github.com/langchain-ai/deepagents). Implements the `BackendProtocol` interface so Deep Agents can use Azure Blob Storage as their virtual filesystem.
 
 **Package name:** `deepagents-azure-blob-backend`

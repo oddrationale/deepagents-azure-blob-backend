@@ -2,9 +2,13 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+This package is deprecated and no longer maintained. No versions receive security fixes.
+
+| Version | Supported |
+| ------- | --------- |
+| all     | :x:       |
+
+Use [`langchain-azure-storage`](https://pypi.org/project/langchain-azure-storage/) instead — see the [migration guide](https://github.com/oddrationale/deepagents-azure-blob-backend#migrating-to-langchain-azure-storage). Report vulnerabilities in its Azure Blob Storage backend to [langchain-ai/langchain-azure](https://github.com/langchain-ai/langchain-azure).
 
 ## Reporting a Vulnerability
 

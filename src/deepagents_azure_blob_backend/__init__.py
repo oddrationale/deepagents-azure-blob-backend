@@ -57,6 +57,8 @@ _DEPRECATION_MESSAGE = (
     "https://github.com/oddrationale/deepagents-azure-blob-backend#migrating-to-langchain-azure-storage"
 )
 
-warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+# FutureWarning rather than DeprecationWarning: Python's default filters hide
+# DeprecationWarning raised from library code, so most users would never see it.
+warnings.warn(_DEPRECATION_MESSAGE, FutureWarning, stacklevel=2)
 
 __all__ = ["AzureBlobBackend", "AzureBlobConfig"]

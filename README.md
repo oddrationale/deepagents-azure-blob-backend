@@ -67,6 +67,8 @@ backend = AzureBlobBackend(
 | *(omit all credentials)* | Unchanged — `DefaultAzureCredential` is still the default |
 | `max_concurrency`, `encoding`, `api_version` | Not exposed; the successor manages concurrency and encoding internally |
 
+The successor's `AzureBlobBackend` is currently marked beta upstream and emits a `LangChainBetaWarning` on construction.
+
 The successor also requires `deepagents>=0.7.1`, where `write` overwrites an existing file instead of erroring and `delete`/`adelete` are part of `BackendProtocol`. Python 3.11+ is required for the `deepagents` extra.
 
 Further reading: [backend integrations](https://docs.langchain.com/oss/python/integrations/backends) · [design proposal and behavior notes](https://github.com/langchain-ai/langchain-azure/blob/main/libs/azure-storage/proposals/deepagents_backend.md) · [upstream PR](https://github.com/langchain-ai/langchain-azure/pull/783)
