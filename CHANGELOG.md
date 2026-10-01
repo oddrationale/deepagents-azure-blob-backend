@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.4.1...deepagents-azure-blob-backend-v0.5.0) (2026-10-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* deepagents is now capped at <0.7.0. deepagents 0.7.0 changed `BackendProtocol` in ways this backend does not implement (write overwrites instead of erroring, `delete`/`adelete` is required, `GrepResult.truncated`), so the previous unbounded pin resolved to a broken combination.
+
+### Features
+
+* deprecate in favor of langchain-azure-storage ([#81](https://github.com/oddrationale/deepagents-azure-blob-backend/issues/81)) ([14b46e6](https://github.com/oddrationale/deepagents-azure-blob-backend/commit/14b46e65eb6788edfee9ed7a4defc4c965315e0b))
+
 ## [0.4.1](https://github.com/oddrationale/deepagents-azure-blob-backend/compare/deepagents-azure-blob-backend-v0.4.0...deepagents-azure-blob-backend-v0.4.1) (2026-06-08)
 
 
